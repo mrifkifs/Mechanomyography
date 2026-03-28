@@ -102,105 +102,76 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 const user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
 
-// Demo data (nanti diganti dengan data dari API)
-const demoSessions = [
-  {date:'2026-02-25T10:00:00Z',dur:1080,grip:62,amp:2.8,cont:142,status:'low'},
-  {date:'2026-02-24T09:30:00Z',dur:1320,grip:59,amp:2.5,cont:118,status:'low'},
-  {date:'2026-02-23T10:15:00Z',dur:1200,grip:65,amp:3.1,cont:155,status:'mid'},
-  {date:'2026-02-22T09:45:00Z',dur:1500,grip:70,amp:3.3,cont:180,status:'mid'},
-  {date:'2026-02-21T08:00:00Z',dur:900, grip:82,amp:3.8,cont:210,status:'ok'},
-  {date:'2026-02-19T10:30:00Z',dur:1800,grip:88,amp:4.1,cont:240,status:'ok'},
-];
-
 async function loadHistory() {
-  let sessions = demoSessions;
+  // Ambil data real dari ThingSpeak (1 minggu terakhir)
+  const feeds = await ThingSpeak.fetchFeeds();
 
-  // Coba ambil sesi dari localStorage
+  // Ambil sesi dari localStorage (dari tombol Mulai Rekam)
+  let sessions = [];
   try {
     const r = await API.getSessions();
-    if (r.data && r.data.length > 0) sessions = r.data.map(s=>({
-      date: s.ended_at, dur: s.duration_seconds, grip: s.avg_grip_pct,
-      amp: '—', cont: '—', status: s.avg_grip_pct>=85?'ok':s.avg_grip_pct>=65?'mid':'low'
-    }));
+    if (r.data && r.data.length > 0) {
+      sessions = r.data.map(s => ({
+        date:   s.ended_at,
+        dur:    s.duration_seconds || 0,
+        amp:    s.avg_amplitude ? s.avg_amplitude.toFixed(2) : '—',
+        status: 'ok'
+      }));
+    }
   } catch {}
 
-  // Ambil data ThingSpeak feeds (data real sensor)
-  try {
-    const tsRes = await fetch(
-      `https://api.thingspeak.com/channels/3317158/feeds.json?api_key=LGHSJWKRW07LFBAW&results=30`
-    );
-    const tsJson = await tsRes.json();
-    if (tsJson.feeds && tsJson.feeds.length > 0) {
-      // Konversi ThingSpeak feeds → format sesi
-      const tsFeeds = tsJson.feeds.filter(f => f.field4);
-      if (tsFeeds.length > 0) {
-        sessions = tsFeeds.map((f, i) => ({
-          date:   f.created_at,
-          dur:    15 * (i + 1),
-          grip:   Math.round(parseFloat(f.field4 || 0)),
-          amp:    parseFloat(f.field1 || 0).toFixed(2),
-          cont:   parseInt(f.field6 || 0),
-          status: parseFloat(f.field4) >= 85 ? 'ok' : parseFloat(f.field4) >= 65 ? 'mid' : 'low'
-        })).reverse();
-        setAntaresStatus(true, 'ThingSpeak — data real ✓');
-      }
-    }
-  } catch(e) {
-    console.warn('[ThingSpeak History]', e.message);
-    setAntaresStatus(false, 'ThingSpeak offline — tampil data lokal');
-  }
+  // Summary dari ThingSpeak feeds
+  const amps = feeds.map(f => f.amplitude).filter(a => a > 0);
+  setText('s-total', sessions.length || feeds.length);
+  setText('s-best',  amps.length ? Math.max(...amps).toFixed(0) : '—');
+  setText('s-avg',   amps.length ? Math.round(amps.reduce((a,b)=>a+b,0)/amps.length) : '—');
 
-  // Summary
-  const grips = sessions.map(s=>s.grip||0).filter(Boolean);
-  setText('s-total', sessions.length);
-  setText('s-best', grips.length ? Math.max(...grips)+'%' : '—');
-  setText('s-avg',  grips.length ? Math.round(grips.reduce((a,b)=>a+b,0)/grips.length)+'%' : '—');
+  // Ubah label summary sesuai amplitude
+  document.querySelectorAll('.sm.muted')[0] && (document.querySelectorAll('.sm.muted')[0].textContent = 'sesi rekaman');
+  document.querySelectorAll('.sm.muted')[1] && (document.querySelectorAll('.sm.muted')[1].textContent = 'ADC tertinggi');
+  document.querySelectorAll('.sm.muted')[2] && (document.querySelectorAll('.sm.muted')[2].textContent = 'ADC rata-rata');
 
-  renderTable(sessions);
-  drawChart(sessions);
+  drawChartFromFeeds(feeds);
+  renderTableFromSessions(sessions);
 }
 
-function renderTable(sessions) {
-  const lbl = {low:'Di Bawah Normal',mid:'Hampir Normal',ok:'Normal'};
-  const cls  = {low:'b-err',mid:'b-warn',ok:'b-ok'};
+function renderTableFromSessions(sessions) {
   if (!sessions.length) { document.getElementById('empty-state').style.display='block'; return; }
   document.getElementById('sess-body').innerHTML = sessions.map(s=>`
     <tr>
       <td>${formatDate(s.date)}</td>
       <td>${formatDur(s.dur||0)}</td>
-      <td style="font-weight:600">${s.grip||'—'}${s.grip?'%':''}</td>
-      <td>${s.amp} mV</td>
-      <td>${s.cont}</td>
-      <td><span class="badge ${cls[s.status]}">${lbl[s.status]}</span></td>
-      <td><button class="btn btn-o btn-sm" onclick="showToast('Memuat detail sesi...','info')">Detail</button></td>
+      <td style="font-weight:600">—</td>
+      <td>${s.amp}</td>
+      <td>—</td>
+      <td><span class="badge b-ok">Selesai</span></td>
+      <td><button class="btn btn-o btn-sm" onclick="exportPDF('${s.date}')">PDF</button></td>
     </tr>`).join('');
 }
 
-function drawChart(sessions) {
+function drawChartFromFeeds(feeds) {
   const c = document.getElementById('hc');
   c.width = c.offsetWidth||800; c.height = c.offsetHeight||176;
   const ctx=c.getContext('2d'), W=c.width, H=c.height;
+  ctx.clearRect(0,0,W,H);
 
-  // Pakai data grip dari sessions (ThingSpeak atau demo)
-  const data = sessions.length >= 2
-    ? sessions.map(s => s.grip || 0).filter(Boolean).reverse()
-    : [88,85,82,80,78,75,72,70,68,65,63,60,59,62,65,63,61,64,67,68,70,72,69,65,62,65,63,61,59,62];
-  const norm=calcNorm(user.gender,user.age,user.weight);
-  const minNorm=norm.min;
+  if (!feeds || feeds.length < 2) {
+    ctx.fillStyle='rgba(255,255,255,.25)'; ctx.font='13px Outfit,sans-serif'; ctx.textAlign='center';
+    ctx.fillText('Belum ada data dari sensor.', W/2, H/2);
+    return;
+  }
 
-  const dMin=Math.min(...data)-5, dMax=Math.max(...data)+5;
-  const toY=v=>H-(v-dMin)/(dMax-dMin)*(H-16)-8;
-  const pts=data.map((v,i)=>[i/(data.length-1)*W, toY(v)]);
+  // Cache untuk export PDF
+  window.__ts_feeds = feeds;
 
-  // Normal min line
-  const ny=toY(minNorm*100/norm.avg); // approximate pct
-  ctx.setLineDash([6,4]); ctx.strokeStyle='rgba(200,75,49,.45)'; ctx.lineWidth=1.5;
-  ctx.beginPath(); ctx.moveTo(0,ny); ctx.lineTo(W,ny); ctx.stroke();
-  ctx.setLineDash([]); ctx.fillStyle='rgba(200,75,49,.5)'; ctx.font='10px Outfit,sans-serif';
-  ctx.fillText('Min. Normal', 8, ny-5);
+  const data = feeds.map(f => f.amplitude);
+  const dMin = Math.max(0, Math.min(...data) - 50);
+  const dMax = Math.min(1023, Math.max(...data) + 50);
+  const toY  = v => H - (v - dMin) / (dMax - dMin) * (H - 16) - 8;
+  const pts  = data.map((v,i) => [i/(data.length-1)*W, toY(v)]);
 
   // Gradient fill
-  const grad=ctx.createLinearGradient(0,0,0,H);
+  const grad = ctx.createLinearGradient(0,0,0,H);
   grad.addColorStop(0,'rgba(45,106,79,.2)'); grad.addColorStop(1,'rgba(45,106,79,0)');
   ctx.fillStyle=grad; ctx.beginPath(); ctx.moveTo(pts[0][0],H);
   pts.forEach(p=>ctx.lineTo(p[0],p[1])); ctx.lineTo(pts[pts.length-1][0],H); ctx.fill();
@@ -210,9 +181,13 @@ function drawChart(sessions) {
   ctx.beginPath(); pts.forEach((p,i)=>i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1])); ctx.stroke(); ctx.shadowBlur=0;
 
   // Dots
-  pts.forEach((p,i)=>{if(i%5===0){ctx.fillStyle='#2d6a4f';ctx.beginPath();ctx.arc(p[0],p[1],4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(p[0],p[1],2,0,Math.PI*2);ctx.fill();}});
-}
+  pts.forEach((p,i)=>{if(i%Math.max(1,Math.floor(pts.length/10))===0){ctx.fillStyle='#2d6a4f';ctx.beginPath();ctx.arc(p[0],p[1],4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(p[0],p[1],2,0,Math.PI*2);ctx.fill();}});
 
+  // Label waktu
+  ctx.fillStyle='rgba(255,255,255,.3)'; ctx.font='9px Outfit,sans-serif'; ctx.textAlign='center';
+  if (feeds[0]) ctx.fillText(new Date(feeds[0].created_at).toLocaleDateString('id-ID'), 30, H-4);
+  if (feeds[feeds.length-1]) ctx.fillText(new Date(feeds[feeds.length-1].created_at).toLocaleDateString('id-ID'), W-30, H-4);
+}
 loadHistory();
 </script>
 </body>

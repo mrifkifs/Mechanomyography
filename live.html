@@ -322,67 +322,75 @@ async function toggleRec() {
   }
 }
 
-// ── WAVEFORM ANIMASI (selalu jalan) ──
+// ── WAVEFORM CANVAS — hanya gambar garis datar jika tidak ada data ──
 let wo = 0;
+let latestAmp = 0; // amplitude dari ThingSpeak, 0 = belum ada data
+
 (function waveLoop() {
-  drawWave(document.getElementById('wc'), '#4aeaaa', wo);
-  wo += 2;
+  const canvas = document.getElementById('wc');
+  if (canvas && canvas.offsetWidth) {
+    canvas.width  = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    const ctx = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
+    ctx.clearRect(0,0,W,H);
+    if (latestAmp > 0) {
+      // Gambar tren amplitude dari ThingSpeak (bukan animasi palsu)
+      ctx.strokeStyle = '#4aeaaa';
+      ctx.lineWidth   = 1.8;
+      ctx.shadowBlur  = 8;
+      ctx.shadowColor = '#4aeaaa';
+      ctx.beginPath();
+      // Visualisasi sinusoidal berdasarkan nilai amplitude real
+      for (let x=0; x<W; x++) {
+        const t = (x + wo) * 0.042;
+        const amp = (latestAmp / 1023) * (H * 0.4);
+        const y = H/2 + amp * (Math.sin(t) + 0.3*Math.sin(t*2.1));
+        x===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+      wo += 1.5;
+    } else {
+      // Tidak ada data → garis datar di tengah
+      ctx.strokeStyle = 'rgba(74,234,170,.2)';
+      ctx.lineWidth   = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, H/2); ctx.lineTo(W, H/2);
+      ctx.stroke();
+      // Teks tunggu
+      ctx.fillStyle = 'rgba(255,255,255,.2)';
+      ctx.font = '11px Outfit,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Menunggu data dari sensor...', W/2, H/2 - 10);
+    }
+  }
   requestAnimationFrame(waveLoop);
 })();
 
-// ── FUNGSI APPLY DATA KE UI ──
-let gPct = 58, fPct = 35;
-function applyData(a, fr, r, gp, fp) {
-  setText('lm-a', a); setText('lm-f', fr); setText('lm-r', r);
-  setText('g-val', gp + '%'); updateGauge('g-arc', gp);
-  const gs = document.getElementById('g-status');
-  if (gp >= 85)      { gs.textContent = 'Normal';          gs.className = 'g-status badge b-ok'; }
-  else if (gp >= 65) { gs.textContent = 'Hampir Normal';   gs.className = 'g-status badge b-warn'; }
-  else               { gs.textContent = 'Di Bawah Normal'; gs.className = 'g-status badge b-err'; }
-  setText('nr-you', (norm.avg * gp / 100).toFixed(1) + ' kgf');
-  setText('fat-n', fp + '%');
-  document.getElementById('fat-b').style.width = fp + '%';
-  setText('fat-l', fp < 40 ? 'Otot segar — lanjutkan' : fp < 65 ? 'Mulai lelah — perhatikan intensitas' : 'Istirahat disarankan segera');
-  zones.forEach((z, i) => {
-    z.pct = Math.max(5, Math.min(95, z.pct + (Math.random() - .5) * 8));
-    const f = document.getElementById('zf' + i), p = document.getElementById('zp' + i);
-    if (f) f.style.width = Math.round(z.pct) + '%';
-    if (p) p.textContent = Math.round(z.pct) + '%';
-  });
-}
-
-// ── POLLING DATA ANTARES (data real dari ESP32) ──
-const stopPolling = Antares.startPolling((data) => {
-  gPct = data.grip_pct; fPct = data.fatigue_pct;
-  setText('lm-c', data.kontraksi);
-  if (isRec) buf.push({ timestamp: new Date().toISOString(),
-    amplitude: data.amplitude, frequency: data.frequency, rms: data.rms });
-  applyData(data.amplitude.toFixed(2), data.frequency.toFixed(1),
-    data.rms.toFixed(2), Math.round(data.grip_pct), Math.round(data.fatigue_pct));
-  setAntaresStatus(true, 'ThingSpeak — data real dari sensor ✓');
-}, 3000);
-
-// ── FALLBACK SIMULASI (jika ESP32 belum kirim data) ──
-setTimeout(async () => {
-  const check = await Antares.fetchLatest();
-  if (!check) {
-    setAntaresStatus(false, 'Simulasi — ThingSpeak belum menerima data');
-    setInterval(() => {
-      if (Math.random() > .7) {
-        const a  = +(2 + Math.random() * 1.5).toFixed(2);
-        const fr = (30 + Math.random() * 15).toFixed(1);
-        const r  = +(a * .72).toFixed(2);
-        gPct = Math.max(25, Math.min(100, gPct + (Math.random() - .4) * 2));
-        fPct = Math.max(10, Math.min(90,  fPct + (Math.random() - .47) * 1.5));
-        if (parseFloat(a) > 3.0 && isRec) {
-          contCount++; setText('lm-c', contCount);
-          buf.push({ timestamp: new Date().toISOString(), amplitude: a, frequency: fr, rms: r });
-        }
-        applyData(a, fr, r, Math.round(gPct), Math.round(fPct));
-      }
-    }, 200);
+// ── THINGSPEAK POLLING — hanya amplitude, tidak ada dummy ──
+ThingSpeak.startPolling((data) => {
+  latestAmp = data.amplitude;
+  // Tampilkan amplitude real di UI
+  setText('lm-a', data.amplitude.toFixed(2));
+  // Field lain (freq, rms) tidak ada dari sensor — tampil 0
+  setText('lm-f', '0');
+  setText('lm-r', '0');
+  // Gauge & fatigue — kosong karena tidak ada dari sensor
+  setText('g-val', '—');
+  setText('fat-n', '—');
+  // Simpan ke buffer jika sedang rekam
+  if (isRec) {
+    buf.push({ timestamp: new Date().toISOString(), amplitude: data.amplitude });
   }
-}, 4000);
+  setTSStatus(true, 'ThingSpeak — sensor terhubung ✓');
+}, 15000);
+
+// Cek awal — jika tidak ada data, tampil status menunggu
+setTimeout(async () => {
+  const check = await ThingSpeak.fetchLatest();
+  if (!check) {
+    setTSStatus(false, 'Menunggu data sensor...');
+  }
+}, 3000);
 
 // CALIBRATION
 function openCal() {

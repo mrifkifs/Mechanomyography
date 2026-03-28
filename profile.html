@@ -133,39 +133,6 @@ setText('d-w',    user.weight+' kg');
 setText('d-h',    user.monitored_hand==='right'?'Tangan Kanan':'Tangan Kiri');
 setText('d-nmin', norm.min+' kgf');
 setText('d-navg', norm.avg+' kgf');
-
-// ── Update progress bar dari data ThingSpeak real ──
-async function updateProgressFromTS() {
-  try {
-    const res = await fetch(
-      `https://api.thingspeak.com/channels/3317158/feeds/last.json?api_key=LGHSJWKRW07LFBAW`
-    );
-    const json = await res.json();
-    if (!json.field4) return;
-
-    const grip    = parseFloat(json.field4 || 0);
-    const fatigue = parseFloat(json.field5 || 0);
-    const stamina = Math.max(0, 100 - fatigue);
-    const kontrak = parseInt(json.field6 || 0);
-    const presisi = Math.min(100, Math.round(kontrak / 2));
-
-    // Update progress bar
-    const bars = document.querySelectorAll('.pfill');
-    const labels = document.querySelectorAll('.prog-v');
-    if (bars[0]) { bars[0].style.width = grip+'%'; }
-    if (labels[0]) labels[0].textContent = grip.toFixed(1)+'% → target 80%';
-    if (bars[1]) { bars[1].style.width = stamina+'%'; }
-    if (labels[1]) labels[1].textContent = stamina.toFixed(1)+'% → target 75%';
-    if (bars[3]) { bars[3].style.width = presisi+'%'; }
-    if (labels[3]) labels[3].textContent = presisi+'% → target 70%';
-
-    setAntaresStatus(true, 'ThingSpeak — data real ✓');
-  } catch(e) {
-    console.warn('[ThingSpeak Profile]', e.message);
-  }
-}
-updateProgressFromTS();
-setInterval(updateProgressFromTS, 15000);
 </script>
 </body>
 </html>

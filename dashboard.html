@@ -205,8 +205,8 @@ tick(); setInterval(tick, 1000);
 async function loadDash() {
   try {
     const r = await API.getProgressReport();
-    const grip = r.latest_grip_pct ?? 62;
-    const fat  = r.latest_fatigue_pct ?? 42;
+    const grip = r.latest_grip_pct ?? 0;
+    const fat  = r.latest_fatigue_pct ?? 0;
     const sess = r.total_sessions ?? 0;
     applyMetrics(grip, fat);
     if (r.last_session) {
@@ -216,10 +216,8 @@ async function loadDash() {
     }
     renderAlerts(r.alerts||[], grip, fat);
   } catch {
-    // fallback simulasi jika API belum tersedia
-    applyMetrics(62, 42);
-    renderAlerts([], 62, 42);
-    setText('l-date', 'API belum terhubung'); setText('l-dur','—'); setText('l-grip','—');
+    // Tidak ada data — tampil kosong saja
+    renderAlerts([], 0, 0);
   }
 }
 
@@ -248,33 +246,39 @@ function renderAlerts(alerts, grip, fat) {
 
 loadDash();
 
-// ── WATCH WAVE ANIMASI (selalu jalan) ──
-let wo = 0;
+// ── WATCH WAVE — dari ThingSpeak, garis datar kalau tidak ada data ──
+let wo = 0, latestAmp = 0;
 (function loop() {
-  drawWave(document.getElementById('wfwc'), 'rgba(74,234,170,.8)', wo);
-  wo += 1.5;
+  const canvas = document.getElementById('wfwc');
+  if (canvas && canvas.offsetWidth) {
+    canvas.width=canvas.offsetWidth; canvas.height=canvas.offsetHeight;
+    const ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
+    ctx.clearRect(0,0,W,H);
+    if (latestAmp > 0) {
+      ctx.strokeStyle='rgba(74,234,170,.8)'; ctx.lineWidth=1.5; ctx.shadowBlur=6; ctx.shadowColor='#4aeaaa';
+      ctx.beginPath();
+      for(let x=0;x<W;x++){const t=(x+wo)*0.05;const a=(latestAmp/1023)*(H*0.4);const y=H/2+a*Math.sin(t);x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+      ctx.stroke(); wo+=1.2;
+    } else {
+      ctx.strokeStyle='rgba(74,234,170,.15)'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.stroke();
+    }
+  }
   requestAnimationFrame(loop);
 })();
 
-// ── THINGSPEAK: update watch preview & metrik dari data real ──
-Antares.startPolling((data) => {
-  // Watch preview
+// ── THINGSPEAK: update watch dari data real ──
+ThingSpeak.startPolling((data) => {
+  latestAmp = data.amplitude;
   setText('wf-amp', data.amplitude.toFixed(1));
-  setText('wf-frq', data.frequency.toFixed(0));
-  setText('wf-grp', Math.round(data.grip_pct));
-  setText('wf-fat', 'FAT ' + Math.round(data.fatigue_pct) + '%');
-  // Metrik bawah
-  applyMetrics(Math.round(data.grip_pct), Math.round(data.fatigue_pct));
-  setAntaresStatus(true, 'ThingSpeak — data real sensor ✓');
+  setText('wf-frq', '—'); setText('wf-grp', '—'); setText('wf-fat', 'LIVE');
+  setTSStatus(true, 'ThingSpeak — sensor terhubung ✓');
 }, 15000);
 
-// Cek jika ThingSpeak belum ada data → tetap simulasi
 setTimeout(async () => {
-  const check = await Antares.fetchLatest();
-  if (!check) {
-    setAntaresStatus(false, 'Simulasi — ThingSpeak belum menerima data');
-  }
-}, 5000);
+  const check = await ThingSpeak.fetchLatest();
+  if (!check) setTSStatus(false, 'Menunggu data sensor...');
+}, 3000);
 </script>
 </body>
 </html>

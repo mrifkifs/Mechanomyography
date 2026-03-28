@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Profil — Mechanomyography</title>
+<script src="shared.js"></script>
+<style>
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 55% 40% at 75% 10%,rgba(26,71,42,.06) 0,transparent 65%);pointer-events:none;}
+.prof-layout{display:grid;grid-template-columns:320px 1fr;gap:20px;}
+.big-av{width:80px;height:80px;background:var(--accent);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:700;margin:0 auto 16px;}
+.det-row{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.det-row:last-child{border-bottom:none;}
+.det-l{color:var(--muted);}
+.det-v{font-weight:500;}
+/* WEEK GRID */
+.week-g{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:20px;}
+.wday{text-align:center;}
+.wday-n{font-size:9px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;}
+.wday-d{width:34px;height:34px;margin:0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;}
+.wd-done{background:var(--accent);color:#fff;}
+.wd-today{background:var(--yellow);color:#fff;}
+.wd-miss{background:var(--red-p);color:var(--red);}
+.wd-fut{background:var(--bg2);color:var(--muted);}
+/* PROGRESS LIST */
+.prog-list{display:flex;flex-direction:column;gap:14px;}
+.prog-item{}
+.prog-h{display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;}
+.prog-n{font-weight:500;}
+.prog-v{color:var(--muted);font-family:'DM Mono',monospace;}
+/* FEATURES */
+.feat-g{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:20px;}
+.feat-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;transition:all .2s;}
+.feat-card:hover{border-color:var(--accent);transform:translateY(-2px);}
+.feat-icon{font-size:26px;margin-bottom:10px;}
+.feat-name{font-size:14px;font-weight:600;margin-bottom:5px;}
+.feat-desc{font-size:12px;color:var(--muted);line-height:1.6;}
+@media(max-width:900px){.prof-layout{grid-template-columns:1fr;}.feat-g{grid-template-columns:1fr 1fr;}}
+</style>
+</head>
+<body>
+
+<nav class="topbar">
+  <a class="logo" href="dashboard.html">Mechanomyography</a>
+  <div class="topbar-nav">
+    <a class="nav-a" href="dashboard.html">Dashboard</a>
+    <a class="nav-a" href="live.html">MMG Live</a>
+    <a class="nav-a" href="history.html">Riwayat</a>
+    <a class="nav-a active" href="profile.html">Profil</a>
+  </div>
+  <div class="flex items-c gap2">
+    <div class="u-avatar" id="top-avatar">?</div>
+    <span class="sm muted" id="top-name">—</span>
+    <button class="btn btn-o btn-sm" onclick="Auth.logout()">Keluar</button>
+  </div>
+</nav>
+
+<div class="wrap">
+
+  <div class="flex jb items-c mb6">
+    <div>
+      <h1 class="serif" style="font-size:26px;margin-bottom:4px">Profil & Progres</h1>
+      <p class="sm muted">Data pasien dan perkembangan rehabilitasi.</p>
+    </div>
+  </div>
+
+  <div class="prof-layout mb6">
+
+    <!-- Info card -->
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="big-av" id="pav">?</div>
+        <div class="serif tc" style="font-size:22px;margin-bottom:4px" id="pname">—</div>
+        <div class="sm muted tc" style="margin-bottom:20px" id="pemail">—</div>
+        <div>
+          <div class="det-row"><span class="det-l">Umur</span><span class="det-v" id="d-age">—</span></div>
+          <div class="det-row"><span class="det-l">Jenis Kelamin</span><span class="det-v" id="d-gen">—</span></div>
+          <div class="det-row"><span class="det-l">Berat Badan</span><span class="det-v" id="d-w">—</span></div>
+          <div class="det-row"><span class="det-l">Tangan Monitor</span><span class="det-v" id="d-h">—</span></div>
+          <div class="det-row"><span class="det-l">Kekuatan Min. Normal</span><span class="det-v" id="d-nmin" style="color:var(--accent)">—</span></div>
+          <div class="det-row"><span class="det-l">Kekuatan Avg. Normal</span><span class="det-v" id="d-navg" style="color:var(--accent)">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress card -->
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="card">
+        <div class="card-title">Kehadiran Rehabilitasi Minggu Ini</div>
+        <div class="week-g">
+          <div class="wday"><div class="wday-n">Sen</div><div class="wday-d wd-done">✓</div></div>
+          <div class="wday"><div class="wday-n">Sel</div><div class="wday-d wd-done">✓</div></div>
+          <div class="wday"><div class="wday-n">Rab</div><div class="wday-d wd-done">✓</div></div>
+          <div class="wday"><div class="wday-n">Kam</div><div class="wday-d wd-miss">✗</div></div>
+          <div class="wday"><div class="wday-n">Jum</div><div class="wday-d wd-today">!</div></div>
+          <div class="wday"><div class="wday-n">Sab</div><div class="wday-d wd-fut">·</div></div>
+          <div class="wday"><div class="wday-n">Min</div><div class="wday-d wd-fut">·</div></div>
+        </div>
+        <div class="prog-list">
+          <div class="prog-item">
+            <div class="prog-h"><span class="prog-n">Kekuatan Grip</span><span class="prog-v">62% → target 80%</span></div>
+            <div class="pbar"><div class="pfill" style="width:62%;background:linear-gradient(to right,#2d6a4f,#e8a838)"></div></div>
+          </div>
+          <div class="prog-item">
+            <div class="prog-h"><span class="prog-n">Stamina Otot</span><span class="prog-v">55% → target 75%</span></div>
+            <div class="pbar"><div class="pfill" style="width:55%;background:linear-gradient(to right,#2d6a4f,#e8a838)"></div></div>
+          </div>
+          <div class="prog-item">
+            <div class="prog-h"><span class="prog-n">Koordinasi Jari</span><span class="prog-v">70% → target 85%</span></div>
+            <div class="pbar"><div class="pfill" style="width:70%;background:linear-gradient(to right,#2d6a4f,#e8a838)"></div></div>
+          </div>
+          <div class="prog-item">
+            <div class="prog-h"><span class="prog-n">Presisi Kontraksi</span><span class="prog-v">48% → target 70%</span></div>
+            <div class="pbar"><div class="pfill" style="width:48%;background:linear-gradient(to right,#2d6a4f,#e8a838)"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<div id="toast"></div>
+
+<script>
+const user = Auth.requireLogin(); if (!user) throw 0;
+Auth.fillTopbar();
+
+const norm = calcNorm(user.gender, user.age, user.weight);
+document.getElementById('pav').textContent = user.name[0].toUpperCase();
+setText('pname', user.name); setText('pemail', user.email);
+setText('d-age',  user.age+' tahun');
+setText('d-gen',  user.gender==='male'?'Laki-laki':'Perempuan');
+setText('d-w',    user.weight+' kg');
+setText('d-h',    user.monitored_hand==='right'?'Tangan Kanan':'Tangan Kiri');
+setText('d-nmin', norm.min+' kgf');
+setText('d-navg', norm.avg+' kgf');
+
+// ── Update progress bar dari data ThingSpeak real ──
+async function updateProgressFromTS() {
+  try {
+    const res = await fetch(
+      `https://api.thingspeak.com/channels/3317158/feeds/last.json?api_key=LGHSJWKRW07LFBAW`
+    );
+    const json = await res.json();
+    if (!json.field4) return;
+
+    const grip    = parseFloat(json.field4 || 0);
+    const fatigue = parseFloat(json.field5 || 0);
+    const stamina = Math.max(0, 100 - fatigue);
+    const kontrak = parseInt(json.field6 || 0);
+    const presisi = Math.min(100, Math.round(kontrak / 2));
+
+    // Update progress bar
+    const bars = document.querySelectorAll('.pfill');
+    const labels = document.querySelectorAll('.prog-v');
+    if (bars[0]) { bars[0].style.width = grip+'%'; }
+    if (labels[0]) labels[0].textContent = grip.toFixed(1)+'% → target 80%';
+    if (bars[1]) { bars[1].style.width = stamina+'%'; }
+    if (labels[1]) labels[1].textContent = stamina.toFixed(1)+'% → target 75%';
+    if (bars[3]) { bars[3].style.width = presisi+'%'; }
+    if (labels[3]) labels[3].textContent = presisi+'% → target 70%';
+
+    setAntaresStatus(true, 'ThingSpeak — data real ✓');
+  } catch(e) {
+    console.warn('[ThingSpeak Profile]', e.message);
+  }
+}
+updateProgressFromTS();
+setInterval(updateProgressFromTS, 15000);
+</script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Masuk — Mechanomyography</title>
+<script src="shared.js"></script>
+<style>
+body{display:flex;min-height:100vh;align-items:center;justify-content:center;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 60% 50% at 15% 50%,rgba(26,71,42,.08) 0,transparent 70%),radial-gradient(ellipse 50% 40% at 85% 80%,rgba(200,75,49,.05) 0,transparent 70%);pointer-events:none;}
+.login-wrap{display:flex;width:900px;max-width:96%;border-radius:24px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.12);position:relative;z-index:1;}
+/* LEFT PANEL */
+.auth-left{width:380px;flex-shrink:0;background:var(--accent);padding:48px 40px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;}
+.auth-left::before{content:'';position:absolute;width:320px;height:320px;border-radius:50%;border:65px solid rgba(255,255,255,.06);bottom:-90px;left:-90px;}
+.auth-left::after{content:'';position:absolute;width:200px;height:200px;border-radius:50%;border:40px solid rgba(255,255,255,.06);top:50px;right:-60px;}
+.al-logo{display:flex;align-items:center;gap:12px;position:relative;z-index:1;}
+.al-icon{width:46px;height:46px;background:rgba(255,255,255,.18);border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:22px;}
+.al-name{font-family:'DM Serif Display',serif;font-size:22px;color:#fff;}
+.al-tagline{position:relative;z-index:1;}
+.al-tagline h1{font-family:'DM Serif Display',serif;font-size:34px;color:#fff;line-height:1.2;margin-bottom:14px;}
+.al-tagline h1 em{font-style:italic;color:rgba(255,255,255,.6);}
+.al-tagline p{color:rgba(255,255,255,.6);font-size:14px;line-height:1.7;}
+.al-feats{display:flex;flex-direction:column;gap:12px;position:relative;z-index:1;}
+.al-feat{display:flex;align-items:center;gap:12px;color:rgba(255,255,255,.75);font-size:13px;}
+.feat-dot{width:7px;height:7px;background:rgba(255,255,255,.4);border-radius:50%;flex-shrink:0;}
+/* RIGHT PANEL */
+.auth-right{flex:1;background:#fff;padding:52px 44px;display:flex;flex-direction:column;justify-content:center;}
+.auth-right h2{font-family:'DM Serif Display',serif;font-size:30px;margin-bottom:6px;}
+.auth-right .sub{color:var(--muted);font-size:14px;margin-bottom:32px;}
+.auth-right .sub a{color:var(--accent);font-weight:500;text-decoration:none;}
+@media(max-width:700px){.auth-left{display:none;}.login-wrap{border-radius:16px;}.auth-right{padding:36px 28px;}}
+</style>
+</head>
+<body>
+<div class="login-wrap">
+  <!-- Kiri -->
+  <div class="auth-left">
+    <div class="al-logo">
+      <div class="al-name">Mechanomyography</div>
+    </div>
+    <div class="al-tagline">
+      <h1>Selamat datang <em>kembali</em></h1>
+      <p>Lanjutkan sesi rehabilitasi Anda dan pantau perkembangan kekuatan otot tangan secara real-time.</p>
+    </div>
+    <div class="al-feats">
+      <div class="al-feat"><div class="feat-dot"></div>Sensor MMG di pergelangan tangan</div>
+      <div class="al-feat"><div class="feat-dot"></div>Analisis kekuatan otot real-time</div>
+      <div class="al-feat"><div class="feat-dot"></div>Riwayat & progres rehabilitasi</div>
+    </div>
+  </div>
+
+  <!-- Kanan -->
+  <div class="auth-right">
+    <h2>Masuk</h2>
+    <p class="sub">Belum punya akun? <a href="register.html">Daftar di sini</a></p>
+
+    <div class="err-box" id="err"></div>
+
+    <div class="fg">
+      <label class="flabel">Email</label>
+      <input class="finput" id="email" type="email" placeholder="email@gmail.com">
+    </div>
+    <div class="fg" style="margin-bottom:28px">
+      <label class="flabel">Password</label>
+      <input class="finput" id="pass" type="password" placeholder="Password Anda"
+        onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+
+    <button class="btn btn-p btn-full" id="login-btn" onclick="doLogin()">Masuk →</button>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+if (Auth.isLoggedIn()) location.href = 'dashboard.html';
+
+async function doLogin() {
+  const email = document.getElementById('email').value.trim();
+  const pass  = document.getElementById('pass').value;
+  const err   = document.getElementById('err');
+  const btn   = document.getElementById('login-btn');
+
+  if (!email || !pass) { err.textContent = 'Email dan password harus diisi.'; err.classList.add('show'); return; }
+  err.classList.remove('show');
+  btn.textContent = 'Memproses...'; btn.disabled = true;
+
+  try {
+    const res = await API.login(email, pass);
+    Auth.save(res.token, res.user);
+    location.href = 'dashboard.html';
+  } catch(e) {
+    err.textContent = e.message || 'Email atau password salah.';
+    err.classList.add('show');
+    btn.textContent = 'Masuk →'; btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>

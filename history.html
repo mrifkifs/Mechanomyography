@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Riwayat — Mechanomyography</title>
+<script src="shared.js"></script>
+<style>
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 55% 40% at 75% 10%,rgba(26,71,42,.06) 0,transparent 65%);pointer-events:none;}
+.h-chart{height:200px;position:relative;background:#060a0e;border-radius:12px;overflow:hidden;padding:12px;}
+.h-chart canvas{position:absolute;inset:12px;width:calc(100% - 24px)!important;height:calc(100% - 24px)!important;}
+.h-chart::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,.02) 2px,rgba(255,255,255,.02) 4px);pointer-events:none;}
+</style>
+</head>
+<body>
+
+<nav class="topbar">
+  <a class="logo" href="dashboard.html">Mechanomyography</a>
+  <div class="topbar-nav">
+    <a class="nav-a" href="dashboard.html">Dashboard</a>
+    <a class="nav-a" href="live.html">MMG Live</a>
+    <a class="nav-a active" href="history.html">Riwayat</a>
+    <a class="nav-a" href="profile.html">Profil</a>
+  </div>
+  <div class="flex items-c gap2">
+    <div class="u-avatar" id="top-avatar">?</div>
+    <span class="sm muted" id="top-name">—</span>
+    <button class="btn btn-o btn-sm" onclick="Auth.logout()">Keluar</button>
+  </div>
+</nav>
+
+<div class="wrap">
+
+  <div class="flex jb items-c mb6">
+    <div>
+      <h1 class="serif" style="font-size:26px;margin-bottom:4px">Riwayat Rehabilitasi</h1>
+      <p class="sm muted">Progres kekuatan otot tangan dari waktu ke waktu.</p>
+    </div>
+    <button class="btn btn-o" onclick="showToast('Mengekspor data pdf...','success')">Export Pdf</button>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="g3 mb6">
+    <div class="card tc">
+      <div class="card-title">Total Sesi</div>
+      <div class="serif" style="font-size:44px" id="s-total">—</div>
+      <div class="sm muted">sesi rekaman</div>
+    </div>
+    <div class="card tc">
+      <div class="card-title">Grip Terbaik</div>
+      <div class="serif" style="font-size:44px;color:#2d6a4f" id="s-best">—</div>
+      <div class="sm muted">% dari normal</div>
+    </div>
+    <div class="card tc">
+      <div class="card-title">Rata-rata Grip</div>
+      <div class="serif" style="font-size:44px;color:var(--yellow)" id="s-avg">—</div>
+      <div class="sm muted">% dari normal</div>
+    </div>
+  </div>
+
+  <!-- Trend chart -->
+  <div class="card mb6">
+    <div class="flex jb items-c" style="margin-bottom:16px">
+      <div class="card-title" style="margin:0">Tren Kekuatan Grip — 30 Hari Terakhir</div>
+      <div style="display:flex;align-items:center;gap:16px;font-size:11px;color:var(--muted)">
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:24px;height:2px;background:#2d6a4f;display:inline-block;border-radius:2px"></span>Grip %</span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:24px;height:2px;background:rgba(200,75,49,.6);display:inline-block;border-radius:2px;border:1px dashed rgba(200,75,49,.6)"></span>Min. Normal</span>
+      </div>
+    </div>
+    <div class="h-chart"><canvas id="hc"></canvas></div>
+  </div>
+
+  <!-- Sessions table -->
+  <div class="card">
+    <div class="card-title">Daftar Sesi</div>
+    <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Tanggal</th>
+            <th>Durasi</th>
+            <th>Grip Avg</th>
+            <th>Amp Max</th>
+            <th>Kontraksi</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="sess-body"></tbody>
+      </table>
+    </div>
+    <div id="empty-state" class="tc" style="padding:32px;display:none">
+      <div style="font-size:32px;margin-bottom:12px"></div>
+      <div class="sm muted">Belum ada sesi yang tersimpan.<br>Mulai rekam dari halaman MMG Live.</div>
+      <a href="live.html" class="btn btn-p" style="margin-top:16px;display:inline-flex">▶ Mulai Sesi</a>
+    </div>
+  </div>
+
+</div>
+<div id="toast"></div>
+
+<script>
+const user = Auth.requireLogin(); if (!user) throw 0;
+Auth.fillTopbar();
+
+// Demo data (nanti diganti dengan data dari API)
+const demoSessions = [
+  {date:'2026-02-25T10:00:00Z',dur:1080,grip:62,amp:2.8,cont:142,status:'low'},
+  {date:'2026-02-24T09:30:00Z',dur:1320,grip:59,amp:2.5,cont:118,status:'low'},
+  {date:'2026-02-23T10:15:00Z',dur:1200,grip:65,amp:3.1,cont:155,status:'mid'},
+  {date:'2026-02-22T09:45:00Z',dur:1500,grip:70,amp:3.3,cont:180,status:'mid'},
+  {date:'2026-02-21T08:00:00Z',dur:900, grip:82,amp:3.8,cont:210,status:'ok'},
+  {date:'2026-02-19T10:30:00Z',dur:1800,grip:88,amp:4.1,cont:240,status:'ok'},
+];
+
+async function loadHistory() {
+  let sessions = demoSessions;
+
+  // Coba ambil sesi dari localStorage
+  try {
+    const r = await API.getSessions();
+    if (r.data && r.data.length > 0) sessions = r.data.map(s=>({
+      date: s.ended_at, dur: s.duration_seconds, grip: s.avg_grip_pct,
+      amp: '—', cont: '—', status: s.avg_grip_pct>=85?'ok':s.avg_grip_pct>=65?'mid':'low'
+    }));
+  } catch {}
+
+  // Ambil data ThingSpeak feeds (data real sensor)
+  try {
+    const tsRes = await fetch(
+      `https://api.thingspeak.com/channels/3317158/feeds.json?api_key=LGHSJWKRW07LFBAW&results=30`
+    );
+    const tsJson = await tsRes.json();
+    if (tsJson.feeds && tsJson.feeds.length > 0) {
+      // Konversi ThingSpeak feeds → format sesi
+      const tsFeeds = tsJson.feeds.filter(f => f.field4);
+      if (tsFeeds.length > 0) {
+        sessions = tsFeeds.map((f, i) => ({
+          date:   f.created_at,
+          dur:    15 * (i + 1),
+          grip:   Math.round(parseFloat(f.field4 || 0)),
+          amp:    parseFloat(f.field1 || 0).toFixed(2),
+          cont:   parseInt(f.field6 || 0),
+          status: parseFloat(f.field4) >= 85 ? 'ok' : parseFloat(f.field4) >= 65 ? 'mid' : 'low'
+        })).reverse();
+        setAntaresStatus(true, 'ThingSpeak — data real ✓');
+      }
+    }
+  } catch(e) {
+    console.warn('[ThingSpeak History]', e.message);
+    setAntaresStatus(false, 'ThingSpeak offline — tampil data lokal');
+  }
+
+  // Summary
+  const grips = sessions.map(s=>s.grip||0).filter(Boolean);
+  setText('s-total', sessions.length);
+  setText('s-best', grips.length ? Math.max(...grips)+'%' : '—');
+  setText('s-avg',  grips.length ? Math.round(grips.reduce((a,b)=>a+b,0)/grips.length)+'%' : '—');
+
+  renderTable(sessions);
+  drawChart(sessions);
+}
+
+function renderTable(sessions) {
+  const lbl = {low:'Di Bawah Normal',mid:'Hampir Normal',ok:'Normal'};
+  const cls  = {low:'b-err',mid:'b-warn',ok:'b-ok'};
+  if (!sessions.length) { document.getElementById('empty-state').style.display='block'; return; }
+  document.getElementById('sess-body').innerHTML = sessions.map(s=>`
+    <tr>
+      <td>${formatDate(s.date)}</td>
+      <td>${formatDur(s.dur||0)}</td>
+      <td style="font-weight:600">${s.grip||'—'}${s.grip?'%':''}</td>
+      <td>${s.amp} mV</td>
+      <td>${s.cont}</td>
+      <td><span class="badge ${cls[s.status]}">${lbl[s.status]}</span></td>
+      <td><button class="btn btn-o btn-sm" onclick="showToast('Memuat detail sesi...','info')">Detail</button></td>
+    </tr>`).join('');
+}
+
+function drawChart(sessions) {
+  const c = document.getElementById('hc');
+  c.width = c.offsetWidth||800; c.height = c.offsetHeight||176;
+  const ctx=c.getContext('2d'), W=c.width, H=c.height;
+
+  // Pakai data grip dari sessions (ThingSpeak atau demo)
+  const data = sessions.length >= 2
+    ? sessions.map(s => s.grip || 0).filter(Boolean).reverse()
+    : [88,85,82,80,78,75,72,70,68,65,63,60,59,62,65,63,61,64,67,68,70,72,69,65,62,65,63,61,59,62];
+  const norm=calcNorm(user.gender,user.age,user.weight);
+  const minNorm=norm.min;
+
+  const dMin=Math.min(...data)-5, dMax=Math.max(...data)+5;
+  const toY=v=>H-(v-dMin)/(dMax-dMin)*(H-16)-8;
+  const pts=data.map((v,i)=>[i/(data.length-1)*W, toY(v)]);
+
+  // Normal min line
+  const ny=toY(minNorm*100/norm.avg); // approximate pct
+  ctx.setLineDash([6,4]); ctx.strokeStyle='rgba(200,75,49,.45)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(0,ny); ctx.lineTo(W,ny); ctx.stroke();
+  ctx.setLineDash([]); ctx.fillStyle='rgba(200,75,49,.5)'; ctx.font='10px Outfit,sans-serif';
+  ctx.fillText('Min. Normal', 8, ny-5);
+
+  // Gradient fill
+  const grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'rgba(45,106,79,.2)'); grad.addColorStop(1,'rgba(45,106,79,0)');
+  ctx.fillStyle=grad; ctx.beginPath(); ctx.moveTo(pts[0][0],H);
+  pts.forEach(p=>ctx.lineTo(p[0],p[1])); ctx.lineTo(pts[pts.length-1][0],H); ctx.fill();
+
+  // Line
+  ctx.strokeStyle='#2d6a4f'; ctx.lineWidth=2.5; ctx.shadowBlur=6; ctx.shadowColor='rgba(45,106,79,.5)';
+  ctx.beginPath(); pts.forEach((p,i)=>i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1])); ctx.stroke(); ctx.shadowBlur=0;
+
+  // Dots
+  pts.forEach((p,i)=>{if(i%5===0){ctx.fillStyle='#2d6a4f';ctx.beginPath();ctx.arc(p[0],p[1],4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(p[0],p[1],2,0,Math.PI*2);ctx.fill();}});
+}
+
+loadHistory();
+</script>
+</body>
+</html>

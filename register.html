@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Daftar — Mechanomyography</title>
+<script src="shared.js"></script>
+<style>
+body{display:flex;min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 60% 50% at 15% 50%,rgba(26,71,42,.08) 0,transparent 70%);pointer-events:none;}
+.auth-left{width:360px;flex-shrink:0;background:var(--accent);padding:48px 36px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;}
+.auth-left::before{content:'';position:absolute;width:280px;height:280px;border-radius:50%;border:55px solid rgba(255,255,255,.06);bottom:-70px;left:-70px;}
+.auth-left::after{content:'';position:absolute;width:180px;height:180px;border-radius:50%;border:36px solid rgba(255,255,255,.06);top:40px;right:-50px;}
+.al-logo{display:flex;align-items:center;gap:12px;position:relative;z-index:1;}
+.al-icon{width:44px;height:44px;background:rgba(255,255,255,.18);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;}
+.al-name{font-family:'DM Serif Display',serif;font-size:21px;color:#fff;}
+.al-tagline{position:relative;z-index:1;}
+.al-tagline h1{font-family:'DM Serif Display',serif;font-size:30px;color:#fff;line-height:1.25;margin-bottom:12px;}
+.al-tagline h1 em{font-style:italic;color:rgba(255,255,255,.6);}
+.al-tagline p{color:rgba(255,255,255,.6);font-size:13px;line-height:1.7;}
+.al-feats{display:flex;flex-direction:column;gap:10px;position:relative;z-index:1;}
+.al-feat{display:flex;align-items:center;gap:10px;color:rgba(255,255,255,.75);font-size:13px;}
+.feat-dot{width:6px;height:6px;background:rgba(255,255,255,.4);border-radius:50%;flex-shrink:0;}
+.auth-right{flex:1;background:#fff;padding:44px 44px;overflow-y:auto;}
+.auth-right h2{font-family:'DM Serif Display',serif;font-size:28px;margin-bottom:5px;}
+.auth-right .sub{color:var(--muted);font-size:14px;margin-bottom:28px;}
+.auth-right .sub a{color:var(--accent);font-weight:500;text-decoration:none;}
+@media(max-width:700px){.auth-left{display:none;}.auth-right{padding:28px 20px;}}
+</style>
+</head>
+<body>
+<!-- Kiri -->
+<div class="auth-left">
+  <div class="al-logo">
+    <div class="al-name">Mechanomyography</div>
+  </div>
+  <div class="al-tagline">
+    <h1>Monitor kekuatan otot <em>lebih cerdas</em></h1>
+    <p>Teknologi Mechanomyography untuk rehabilitasi tangan yang presisi dan real-time.</p> 
+  </div>
+  <div class="al-feats">
+    <div class="al-feat"><div class="feat-dot"></div>Sensor MMG pergelangan tangan</div>
+    <div class="al-feat"><div class="feat-dot"></div>Referensi nilai normal by usia & gender</div>
+    <div class="al-feat"><div class="feat-dot"></div>Riwayat & progres rehabilitasi</div>
+    <div class="al-feat"><div class="feat-dot"></div>Deteksi kelelahan otot otomatis</div>
+  </div>
+</div>
+
+<!-- Kanan: Form -->
+<div class="auth-right">
+  <h2>Buat Akun</h2>
+  <p class="sub">Sudah punya akun? <a href="login.html">Masuk di sini</a></p>
+
+  <div class="err-box" id="err"></div>
+
+  <div class="frow">
+    <div class="fg">
+      <label class="flabel">Nama Lengkap</label>
+      <input class="finput" id="name" type="text" placeholder="Budi Santoso">
+    </div>
+    <div class="fg">
+      <label class="flabel">Email</label>
+      <input class="finput" id="email" type="email" placeholder="email@gmail.com">
+    </div>
+  </div>
+  <div class="frow">
+    <div class="fg">
+      <label class="flabel">Password</label>
+      <input class="finput" id="pass" type="password" placeholder="Min. 6 karakter">
+    </div>
+    <div class="fg">
+      <label class="flabel">Konfirmasi Password</label>
+      <input class="finput" id="confirm" type="password" placeholder="Ulangi password">
+    </div>
+  </div>
+  <div class="frow">
+    <div class="fg">
+      <label class="flabel">Umur (tahun)</label>
+      <input class="finput" id="age" type="number" placeholder="25" min="1" max="120">
+    </div>
+    <div class="fg">
+      <label class="flabel">Berat Badan (kg)</label>
+      <input class="finput" id="weight" type="number" placeholder="70" min="20" max="250">
+    </div>
+  </div>
+  <div class="fg">
+    <label class="flabel">Jenis Kelamin</label>
+    <div class="radio-g">
+      <label class="radio-o" id="opt-m" onclick="selGender('male')"><input type="radio" name="gender"> 👨 Laki-laki</label>
+      <label class="radio-o" id="opt-f" onclick="selGender('female')"><input type="radio" name="gender"> 👩 Perempuan</label>
+    </div>
+  </div>
+  <div class="fg" style="margin-bottom:28px">
+    <label class="flabel">Tangan yang Direhabilitasi</label>
+    <select class="finput" id="hand">
+      <option value="right">Tangan Kanan</option>
+      <option value="left">Tangan Kiri</option>
+    </select>
+  </div>
+
+  <button class="btn btn-p btn-full" id="reg-btn" onclick="doRegister()">Daftar Sekarang →</button>
+</div>
+
+<div id="toast"></div>
+<script>
+if (Auth.isLoggedIn()) location.href = 'dashboard.html';
+let gender = '';
+function selGender(g) {
+  gender = g;
+  document.getElementById('opt-m').classList.toggle('sel', g==='male');
+  document.getElementById('opt-f').classList.toggle('sel', g==='female');
+}
+async function doRegister() {
+  const name = document.getElementById('name').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const pass = document.getElementById('pass').value;
+  const confirm = document.getElementById('confirm').value;
+  const age = parseInt(document.getElementById('age').value);
+  const weight = parseFloat(document.getElementById('weight').value);
+  const hand = document.getElementById('hand').value;
+  const err = document.getElementById('err');
+  const btn = document.getElementById('reg-btn');
+
+  if (!name||!email||!pass||!age||!weight||!gender) { err.textContent='Semua field harus diisi.'; err.classList.add('show'); return; }
+  if (pass !== confirm) { err.textContent='Password tidak cocok.'; err.classList.add('show'); return; }
+  if (pass.length < 6) { err.textContent='Password minimal 6 karakter.'; err.classList.add('show'); return; }
+  err.classList.remove('show');
+  btn.textContent = 'Memproses...'; btn.disabled = true;
+
+  try {
+    const res = await API.register({ name, email, password: pass, password_confirmation: confirm, age, weight, gender, monitored_hand: hand });
+    Auth.save(res.token, res.user);
+    location.href = 'dashboard.html';
+  } catch(e) {
+    err.textContent = e.message; err.classList.add('show');
+    btn.textContent = 'Daftar Sekarang →'; btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>

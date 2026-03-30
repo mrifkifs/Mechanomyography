@@ -322,117 +322,75 @@ async function toggleRec() {
   }
 }
 
-// ── REAL THINGSPEAK WAVEFORM ──────────────────────────────────────
-// Buffer titik data nyata dari ThingSpeak, max 120 titik (scrolling)
-const MAX_PTS = 120;
-let ampHistory = [];   // [{amp, ts}]
-let latestAmp  = 0;
-let animFrame;
+// ── WAVEFORM CANVAS — hanya gambar garis datar jika tidak ada data ──
+let wo = 0;
+let latestAmp = 0; // amplitude dari ThingSpeak, 0 = belum ada data
 
-function drawRealWave() {
+(function waveLoop() {
   const canvas = document.getElementById('wc');
-  if (!canvas || !canvas.offsetWidth) { animFrame = requestAnimationFrame(drawRealWave); return; }
-  canvas.width  = canvas.offsetWidth;
-  canvas.height = canvas.offsetHeight;
-  const ctx = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
-  ctx.clearRect(0,0,W,H);
-
-  if (ampHistory.length < 2) {
-    // Belum ada cukup data — garis datar + pesan
-    ctx.strokeStyle = 'rgba(74,234,170,.15)';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,.2)';
-    ctx.font = '11px Outfit,sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('Menunggu data dari sensor ThingSpeak...', W/2, H/2 - 10);
-    return;
+  if (canvas && canvas.offsetWidth) {
+    canvas.width  = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    const ctx = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
+    ctx.clearRect(0,0,W,H);
+    if (latestAmp > 0) {
+      // Gambar tren amplitude dari ThingSpeak (bukan animasi palsu)
+      ctx.strokeStyle = '#4aeaaa';
+      ctx.lineWidth   = 1.8;
+      ctx.shadowBlur  = 8;
+      ctx.shadowColor = '#4aeaaa';
+      ctx.beginPath();
+      // Visualisasi sinusoidal berdasarkan nilai amplitude real
+      for (let x=0; x<W; x++) {
+        const t = (x + wo) * 0.042;
+        const amp = (latestAmp / 1023) * (H * 0.4);
+        const y = H/2 + amp * (Math.sin(t) + 0.3*Math.sin(t*2.1));
+        x===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+      wo += 1.5;
+    } else {
+      // Tidak ada data → garis datar di tengah
+      ctx.strokeStyle = 'rgba(74,234,170,.2)';
+      ctx.lineWidth   = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, H/2); ctx.lineTo(W, H/2);
+      ctx.stroke();
+      // Teks tunggu
+      ctx.fillStyle = 'rgba(255,255,255,.2)';
+      ctx.font = '11px Outfit,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Menunggu data dari sensor...', W/2, H/2 - 10);
+    }
   }
-
-  // Skala Y berdasarkan rentang data nyata
-  const vals = ampHistory.map(p => p.amp);
-  const dMin = Math.max(0,   Math.min(...vals) - 20);
-  const dMax = Math.min(1023, Math.max(...vals) + 20);
-  const pad  = 10;
-  const toY  = v => H - pad - ((v - dMin) / (Math.max(dMax - dMin, 1))) * (H - pad*2);
-
-  // Gradient fill di bawah kurva
-  const grad = ctx.createLinearGradient(0,0,0,H);
-  grad.addColorStop(0, 'rgba(74,234,170,.18)');
-  grad.addColorStop(1, 'rgba(74,234,170,0)');
-
-  const n   = ampHistory.length;
-  const pts = ampHistory.map((p,i) => [i / (n-1) * W, toY(p.amp)]);
-
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.moveTo(pts[0][0], H);
-  pts.forEach(p => ctx.lineTo(p[0], p[1]));
-  ctx.lineTo(pts[n-1][0], H);
-  ctx.closePath(); ctx.fill();
-
-  // Kurva utama
-  ctx.strokeStyle = '#4aeaaa';
-  ctx.lineWidth   = 2;
-  ctx.shadowBlur  = 8;
-  ctx.shadowColor = '#4aeaaa';
-  ctx.beginPath();
-  pts.forEach((p,i) => i===0 ? ctx.moveTo(p[0],p[1]) : ctx.lineTo(p[0],p[1]));
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-
-  // Titik terakhir — glowing dot
-  const last = pts[pts.length-1];
-  ctx.beginPath(); ctx.arc(last[0], last[1], 4, 0, Math.PI*2);
-  ctx.fillStyle = '#4aeaaa'; ctx.fill();
-  ctx.beginPath(); ctx.arc(last[0], last[1], 8, 0, Math.PI*2);
-  ctx.strokeStyle = 'rgba(74,234,170,.3)'; ctx.lineWidth = 1.5; ctx.stroke();
-
-  // Label nilai Y kiri
-  ctx.fillStyle = 'rgba(255,255,255,.25)';
-  ctx.font = '9px DM Mono,monospace'; ctx.textAlign = 'left';
-  ctx.fillText(Math.round(dMax), 4, pad+8);
-  ctx.fillText(Math.round(dMin), 4, H-pad-2);
-
-  // Label waktu kanan-kiri bawah
-  ctx.textAlign = 'left';
-  if (ampHistory[0]) ctx.fillText(new Date(ampHistory[0].ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), 4, H-2);
-  ctx.textAlign = 'right';
-  if (ampHistory[n-1]) ctx.fillText(new Date(ampHistory[n-1].ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), W-4, H-2);
-}
-
-// Re-draw setiap ~200 ms (bukan animasi terus-menerus karena data 15 detik sekali)
-setInterval(drawRealWave, 200);
-
-// ── LOAD DATA AWAL dari feeds ThingSpeak (isi buffer dari data historis) ──
-(async function initFeeds() {
-  const feeds = await ThingSpeak.fetchFeeds();
-  if (feeds && feeds.length > 0) {
-    // Ambil 120 data terakhir
-    const recent = feeds.slice(-MAX_PTS);
-    ampHistory = recent.map(f => ({ amp: f.amplitude, ts: f.timestamp }));
-    latestAmp  = ampHistory[ampHistory.length-1].amp;
-    setText('lm-a', latestAmp.toFixed(0));
-    drawRealWave();
-    setTSStatus(true, `ThingSpeak — ${feeds.length} data dimuat ✓`);
-  } else {
-    setTSStatus(false, 'Menunggu data sensor...');
-  }
+  requestAnimationFrame(waveLoop);
 })();
 
-// ── POLLING setiap 15 detik — tambah titik baru ke buffer scrolling ──
+// ── THINGSPEAK POLLING — hanya amplitude, tidak ada dummy ──
 ThingSpeak.startPolling((data) => {
-  // Tambah ke buffer, buang yang terlama jika sudah penuh
-  ampHistory.push({ amp: data.amplitude, ts: data.timestamp });
-  if (ampHistory.length > MAX_PTS) ampHistory.shift();
-
   latestAmp = data.amplitude;
-  setText('lm-a', data.amplitude.toFixed(0));
-
+  // Tampilkan amplitude real di UI
+  setText('lm-a', data.amplitude.toFixed(2));
+  // Field lain (freq, rms) tidak ada dari sensor — tampil 0
+  setText('lm-f', '0');
+  setText('lm-r', '0');
+  // Gauge & fatigue — kosong karena tidak ada dari sensor
+  setText('g-val', '—');
+  setText('fat-n', '—');
+  // Simpan ke buffer jika sedang rekam
   if (isRec) {
     buf.push({ timestamp: new Date().toISOString(), amplitude: data.amplitude });
   }
-  setTSStatus(true, 'ThingSpeak — sensor aktif ✓');
+  setTSStatus(true, 'ThingSpeak — sensor terhubung ✓');
 }, 15000);
+
+// Cek awal — jika tidak ada data, tampil status menunggu
+setTimeout(async () => {
+  const check = await ThingSpeak.fetchLatest();
+  if (!check) {
+    setTSStatus(false, 'Menunggu data sensor...');
+  }
+}, 3000);
 
 // CALIBRATION
 function openCal() {

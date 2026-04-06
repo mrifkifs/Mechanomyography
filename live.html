@@ -82,7 +82,15 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
           <div class="card-title" style="margin:0">Sinyal MMG Real-Time</div>
           <div class="flex items-c gap2 sm" style="color:var(--red)"><div class="ldot"></div> LIVE</div>
         </div>
-        <div class="wave-wrap"><canvas id="wc"></canvas></div>
+        <div class="wave-wrap" style="padding: 0;">
+  <iframe 
+    src="https://muhammadrifki.grafana.net/public-dashboards/0c2be7f4d45f428aa01c443a65269ae4?kiosk" 
+    width="100%" 
+    height="100%" 
+    frameborder="0" 
+    style="border-radius: 12px; pointer-events: none;">
+  </iframe>
+</div>
         <div class="lm-row" style="grid-template-columns:1fr;">
           <div class="lm-box"><div class="lm-v" id="lm-a">—</div><div class="lm-l">Force (Newton)</div></div>
         </div>

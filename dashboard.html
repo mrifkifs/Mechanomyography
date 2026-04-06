@@ -123,10 +123,20 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
               <span class="wf-pill">● AKTIF</span>
               <span class="wf-pill r" id="wf-fat">FAT —%</span>
             </div>
-            <div class="wf-wave"><canvas id="wfwc"></canvas></div>
+            <div class="wf-wave">
+  <iframe 
+    src="https://muhammadrifki.grafana.net/public-dashboards/0c2be7f4d45f428aa01c443a65269ae4?kiosk" 
+    width="100%" 
+    height="100%" 
+    frameborder="0"
+    style="border-radius: 4px;">
+  </iframe>
+</div>
             <div class="wf-metrics">
               <div class="wf-m"><div class="wf-ml">Amp</div><div class="wf-mv" id="wf-amp">—</div><div class="wf-mu">mV</div></div>
+              <div class="wf-m"><div class="wf-ml">Freq</div><div class="wf-mv" id="wf-frq">—</div><div class="wf-mu">Hz</div></div>
               <div class="wf-m"><div class="wf-ml">Grip</div><div class="wf-mv" id="wf-grp" style="color:#ffd27a">—</div><div class="wf-mu">%</div></div>
+              <div class="wf-m"><div class="wf-ml">Bat</div><div class="wf-mv" style="color:#a8e6c0">87</div><div class="wf-mu">%</div></div>
             </div>
           </div>
         </div>

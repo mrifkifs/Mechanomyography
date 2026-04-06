@@ -4,11 +4,10 @@
    Field: field1 = amplitude (ADC) saja
    ================================================ */
 
-// ── THINGSPEAK ───────────────────────────────────────────────
-const TS_CHANNEL_ID = '3317158';
-const TS_READ_KEY   = 'LGHSJWKRW07LFBAW';
-const TS_URL_LATEST = `https://api.thingspeak.com/channels/${TS_CHANNEL_ID}/feeds/last.json?api_key=${TS_READ_KEY}`;
-const TS_URL_FEEDS  = `https://api.thingspeak.com/channels/${TS_CHANNEL_ID}/feeds.json?api_key=${TS_READ_KEY}&days=7`;
+// ── FIREBASE REALTIME DATABASE ───────────────────────────────
+const FB_URL      = 'https://send-mmg-default-rtdb.asia-southeast1.firebasedatabase.app';
+const FB_REALTIME = `${FB_URL}/fsr/realtime.json`;
+const FB_EVENTS   = `${FB_URL}/fsr/event.json?orderBy="$key"&limitToLast=50`;
 
 // ── OFFLINE DB ────────────────────────────────────────────────
 const DB = {
@@ -64,39 +63,58 @@ const API = {
   getNormative: async (g, a, w) => calcNorm(g, parseInt(a), parseFloat(w)),
 };
 
-// ── THINGSPEAK FETCH ──────────────────────────────────────────
-const ThingSpeak = {
+// ── FIREBASE FETCH ────────────────────────────────────────────
+const Firebase = {
+  // Ambil data realtime terbaru (force + status)
   fetchLatest: async () => {
     try {
-      const res = await fetch(TS_URL_LATEST);
+      const res = await fetch(FB_REALTIME);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      if (!json.field1) return null;
-      return { amplitude: parseFloat(json.field1 || 0), timestamp: new Date(json.created_at).getTime(), created_at: json.created_at };
-    } catch (e) { console.warn('[ThingSpeak] fetchLatest:', e.message); return null; }
+      if (!json || json.force === undefined) return null;
+      return {
+        force:     parseFloat(json.force  || 0),
+        status:    json.status || '—',
+        timestamp: Date.now(),
+      };
+    } catch (e) { console.warn('[Firebase] fetchLatest:', e.message); return null; }
   },
-  fetchFeeds: async () => {
+
+  // Ambil event kontraksi untuk grafik historis
+  fetchEvents: async () => {
     try {
-      const res = await fetch(TS_URL_FEEDS);
+      const res = await fetch(FB_EVENTS);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      return (json.feeds || []).filter(f => f.field1).map(f => ({
-        amplitude: parseFloat(f.field1 || 0), timestamp: new Date(f.created_at).getTime(), created_at: f.created_at
-      }));
-    } catch (e) { console.warn('[ThingSpeak] fetchFeeds:', e.message); return []; }
+      if (!json) return [];
+      return Object.entries(json).map(([key, val]) => ({
+        force:     parseFloat(val.force  || 0),
+        status:    val.status || '—',
+        timestamp: parseInt(key),
+      })).sort((a,b) => a.timestamp - b.timestamp);
+    } catch (e) { console.warn('[Firebase] fetchEvents:', e.message); return []; }
   },
-  startPolling: (callback, intervalMs = 15000) => {
-    let lastTimestamp = 0;
+
+  // Polling realtime setiap 2 detik (Firebase jauh lebih cepat dari ThingSpeak)
+  startPolling: (callback, intervalMs = 2000) => {
+    let lastForce = -1;
     const poll = async () => {
-      const data = await ThingSpeak.fetchLatest();
-      if (data && data.timestamp !== lastTimestamp) { lastTimestamp = data.timestamp; callback(data); setTSStatus(true, 'ThingSpeak — sensor terhubung ✓'); }
+      const data = await Firebase.fetchLatest();
+      if (data && data.force !== lastForce) {
+        lastForce = data.force;
+        callback(data);
+        setTSStatus(true, 'Firebase — sensor terhubung ✓');
+      }
     };
     poll();
     const timer = setInterval(poll, intervalMs);
     return () => clearInterval(timer);
   },
 };
-const Antares = ThingSpeak; // backward compat
+
+// Alias untuk backward compat
+const ThingSpeak = Firebase;
+const Antares    = Firebase;
 
 // ── AUTH ──────────────────────────────────────────────────────
 const Auth = {
@@ -131,7 +149,7 @@ function drawWave(canvas, color, offset) {
   ctx.stroke();
 }
 function updateGauge(arcId, pct) { const a=document.getElementById(arcId); if(!a) return; a.setAttribute('stroke-dashoffset',252-(pct/100)*252); a.setAttribute('stroke',pct>=85?'#2d6a4f':pct>=65?'#e8a838':'#c84b31'); }
-function setTSStatus(connected, msg) { const el=document.getElementById('antares-status'); const lbl=document.getElementById('antares-label'); if(!el||!lbl) return; lbl.textContent=msg||(connected?'ThingSpeak terhubung':'Menunggu data sensor...'); el.classList.toggle('err',!connected); el.classList.add('show'); }
+function setTSStatus(connected, msg) { const el=document.getElementById('antares-status'); const lbl=document.getElementById('antares-label'); if(!el||!lbl) return; lbl.textContent=msg||(connected?'Firebase — sensor terhubung':'Menunggu data sensor...'); el.classList.toggle('err',!connected); el.classList.add('show'); }
 function setAntaresStatus(c, m) { setTSStatus(c, m); }
 
 // ── CSS + FONTS ───────────────────────────────────────────────

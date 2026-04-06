@@ -83,11 +83,8 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
           <div class="flex items-c gap2 sm" style="color:var(--red)"><div class="ldot"></div> LIVE</div>
         </div>
         <div class="wave-wrap"><canvas id="wc"></canvas></div>
-        <div class="lm-row">
-          <div class="lm-box"><div class="lm-v" id="lm-a">—</div><div class="lm-l">Amp (mV)</div></div>
-          <div class="lm-box"><div class="lm-v" id="lm-f">—</div><div class="lm-l">Freq (Hz)</div></div>
-          <div class="lm-box"><div class="lm-v" id="lm-r">—</div><div class="lm-l">RMS (mV)</div></div>
-          <div class="lm-box"><div class="lm-v" id="lm-c">0</div><div class="lm-l">Kontraksi</div></div>
+        <div class="lm-row" style="grid-template-columns:1fr;">
+          <div class="lm-box"><div class="lm-v" id="lm-a">—</div><div class="lm-l">Force (Newton)</div></div>
         </div>
       </div>
 
@@ -234,7 +231,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 
       <!-- Fatigue -->
       <div class="card">
-        <div class="card-title">Fatigue Otot</div>
+        <div class="card-title">Status Otot</div>
         <div style="font-size:36px;font-weight:700;text-align:center;margin-bottom:8px" id="fat-n">—</div>
         <div class="pbar mb4"><div class="pfill" id="fat-b" style="width:0;background:linear-gradient(to right,#2d6a4f,#e8a838,#c84b31)"></div></div>
         <p class="sm muted tc" id="fat-l">—</p>
@@ -360,36 +357,45 @@ let latestAmp = 0; // amplitude dari ThingSpeak, 0 = belum ada data
       ctx.fillStyle = 'rgba(255,255,255,.2)';
       ctx.font = '11px Outfit,sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('Menunggu data dari sensor...', W/2, H/2 - 10);
+      ctx.fillText('Menunggu data dari sensor FSR...', W/2, H/2 - 10);
     }
   }
   requestAnimationFrame(waveLoop);
 })();
 
 // ── THINGSPEAK POLLING — hanya amplitude, tidak ada dummy ──
-ThingSpeak.startPolling((data) => {
-  latestAmp = data.amplitude;
-  // Tampilkan amplitude real di UI
-  setText('lm-a', data.amplitude.toFixed(2));
-  // Field lain (freq, rms) tidak ada dari sensor — tampil 0
-  setText('lm-f', '0');
-  setText('lm-r', '0');
-  // Gauge & fatigue — kosong karena tidak ada dari sensor
-  setText('g-val', '—');
-  setText('fat-n', '—');
-  // Simpan ke buffer jika sedang rekam
-  if (isRec) {
-    buf.push({ timestamp: new Date().toISOString(), amplitude: data.amplitude });
-  }
-  setTSStatus(true, 'ThingSpeak — sensor terhubung ✓');
-}, 15000);
+Firebase.startPolling((data) => {
+  // data.force = nilai force Newton dari sensor FSR Arduino
+  latestAmp = data.force;
 
-// Cek awal — jika tidak ada data, tampil status menunggu
+  // Tampil force
+  setText('lm-a', data.force.toFixed(3));
+
+  // Konversi force Newton → grip %
+  // norm.avg = rata-rata kekuatan normal pasien dalam kgf (1 kgf ≈ 9.8 N)
+  const normNewton = norm.avg * 9.8;
+  const gripEst = Math.min(100, Math.round((data.force / normNewton) * 100));
+  setText('g-val', gripEst + '%');
+  updateGauge('g-arc', gripEst);
+  const gs = document.getElementById('g-status');
+  if (gripEst >= 85)      { gs.textContent='Normal';          gs.className='g-status badge b-ok'; }
+  else if (gripEst >= 65) { gs.textContent='Hampir Normal';   gs.className='g-status badge b-warn'; }
+  else                    { gs.textContent='Di Bawah Normal'; gs.className='g-status badge b-err'; }
+  setText('nr-you', data.force.toFixed(2) + ' N');
+
+  // Status dari Arduino: Lemah / Sedang / Kuat
+  setText('fat-n', data.status || '—');
+
+  // Simpan ke buffer jika sedang rekam
+  if (isRec) buf.push({ timestamp: new Date().toISOString(), force: data.force, status: data.status });
+
+  setTSStatus(true, 'Firebase — sensor terhubung ✓');
+}, 2000);
+
+// Cek awal
 setTimeout(async () => {
-  const check = await ThingSpeak.fetchLatest();
-  if (!check) {
-    setTSStatus(false, 'Menunggu data sensor...');
-  }
+  const check = await Firebase.fetchLatest();
+  if (!check) setTSStatus(false, 'Menunggu data sensor...');
 }, 3000);
 
 // CALIBRATION

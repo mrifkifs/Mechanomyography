@@ -60,7 +60,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
   <!-- Trend chart -->
   <div class="card mb6">
     <div class="flex jb items-c" style="margin-bottom:16px">
-      <div class="card-title" style="margin:0">Tren Kekuatan Grip — 30 Hari Terakhir</div>
+      <div class="card-title" style="margin:0">Tren Kekuatan Grip — Data Kontraksi Firebase</div>
       <div style="display:flex;align-items:center;gap:16px;font-size:11px;color:var(--muted)">
         <span style="display:flex;align-items:center;gap:5px"><span style="width:24px;height:2px;background:#2d6a4f;display:inline-block;border-radius:2px"></span>Grip %</span>
         <span style="display:flex;align-items:center;gap:5px"><span style="width:24px;height:2px;background:rgba(200,75,49,.6);display:inline-block;border-radius:2px;border:1px dashed rgba(200,75,49,.6)"></span>Min. Normal</span>
@@ -103,10 +103,10 @@ const user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
 
 async function loadHistory() {
-  // Ambil data real dari ThingSpeak (1 minggu terakhir)
-  const feeds = await ThingSpeak.fetchFeeds();
+  // ── Ambil event kontraksi dari Firebase ──
+  const events = await Firebase.fetchEvents();
 
-  // Ambil sesi dari localStorage (dari tombol Mulai Rekam)
+  // ── Ambil sesi dari localStorage ──
   let sessions = [];
   try {
     const r = await API.getSessions();
@@ -114,25 +114,29 @@ async function loadHistory() {
       sessions = r.data.map(s => ({
         date:   s.ended_at,
         dur:    s.duration_seconds || 0,
-        amp:    s.avg_amplitude ? s.avg_amplitude.toFixed(2) : '—',
-        status: 'ok'
+        force:  s.avg_force ? s.avg_force.toFixed(3) : '—',
+        status: s.avg_force >= 3 ? 'Kuat' : s.avg_force >= 1 ? 'Sedang' : 'Lemah'
       }));
     }
   } catch {}
 
-  // Summary dari ThingSpeak feeds
-  const amps = feeds.map(f => f.amplitude).filter(a => a > 0);
-  setText('s-total', sessions.length || feeds.length);
-  setText('s-best',  amps.length ? Math.max(...amps).toFixed(0) : '—');
-  setText('s-avg',   amps.length ? Math.round(amps.reduce((a,b)=>a+b,0)/amps.length) : '—');
+  // ── Summary dari Firebase events ──
+  const forces = events.map(e => e.force).filter(f => f > 0);
+  const norm   = calcNorm(user.gender, user.age, user.weight);
+  const normN  = norm.avg * 9.8; // kgf → Newton
 
-  // Ubah label summary sesuai amplitude
-  document.querySelectorAll('.sm.muted')[0] && (document.querySelectorAll('.sm.muted')[0].textContent = 'sesi rekaman');
-  document.querySelectorAll('.sm.muted')[1] && (document.querySelectorAll('.sm.muted')[1].textContent = 'ADC tertinggi');
-  document.querySelectorAll('.sm.muted')[2] && (document.querySelectorAll('.sm.muted')[2].textContent = 'ADC rata-rata');
+  // Konversi force → grip %
+  const grips = forces.map(f => Math.min(100, Math.round((f / normN) * 100)));
 
-  drawChartFromFeeds(feeds);
+  setText('s-total', sessions.length || events.length);
+  setText('s-best',  grips.length ? Math.max(...grips) + '%' : '—');
+  setText('s-avg',   grips.length ? Math.round(grips.reduce((a,b)=>a+b,0)/grips.length) + '%' : '—');
+
+  drawChartFromEvents(events, normN);
   renderTableFromSessions(sessions);
+
+  if (events.length > 0) setTSStatus(true, 'Firebase — data real ✓');
+  else setTSStatus(false, 'Belum ada data dari sensor');
 }
 
 function renderTableFromSessions(sessions) {
@@ -149,44 +153,116 @@ function renderTableFromSessions(sessions) {
     </tr>`).join('');
 }
 
-function drawChartFromFeeds(feeds) {
+function drawChartFromEvents(events, normN) {
   const c = document.getElementById('hc');
   c.width = c.offsetWidth||800; c.height = c.offsetHeight||176;
-  const ctx=c.getContext('2d'), W=c.width, H=c.height;
+  const ctx = c.getContext('2d'), W = c.width, H = c.height;
   ctx.clearRect(0,0,W,H);
 
-  if (!feeds || feeds.length < 2) {
-    ctx.fillStyle='rgba(255,255,255,.25)'; ctx.font='13px Outfit,sans-serif'; ctx.textAlign='center';
-    ctx.fillText('Belum ada data dari sensor.', W/2, H/2);
+  if (!events || events.length < 2) {
+    ctx.fillStyle='rgba(255,255,255,.25)';
+    ctx.font='13px Outfit,sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText('Belum ada data kontraksi dari sensor.', W/2, H/2);
     return;
   }
 
   // Cache untuk export PDF
-  window.__ts_feeds = feeds;
+  window.__fb_events = events;
 
-  const data = feeds.map(f => f.amplitude);
-  const dMin = Math.max(0, Math.min(...data) - 50);
-  const dMax = Math.min(1023, Math.max(...data) + 50);
-  const toY  = v => H - (v - dMin) / (dMax - dMin) * (H - 16) - 8;
-  const pts  = data.map((v,i) => [i/(data.length-1)*W, toY(v)]);
+  // Konversi force → grip %
+  const data = events.map(e => Math.min(100, Math.round((e.force / normN) * 100)));
+  const dMin = 0, dMax = 100;
+  const toY  = v => H - (v - dMin) / (dMax - dMin) * (H - 24) - 12;
+  const pts  = data.map((v,i) => [i / (data.length-1) * W, toY(v)]);
+
+  // Garis min normal (80%)
+  const nyNorm = toY(80);
+  ctx.setLineDash([6,4]);
+  ctx.strokeStyle = 'rgba(200,75,49,.5)';
+  ctx.lineWidth   = 1.5;
+  ctx.beginPath(); ctx.moveTo(0, nyNorm); ctx.lineTo(W, nyNorm); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(200,75,49,.5)';
+  ctx.font='9px Outfit,sans-serif'; ctx.textAlign='left';
+  ctx.fillText('Min. Normal (80%)', 6, nyNorm - 4);
 
   // Gradient fill
   const grad = ctx.createLinearGradient(0,0,0,H);
-  grad.addColorStop(0,'rgba(45,106,79,.2)'); grad.addColorStop(1,'rgba(45,106,79,0)');
-  ctx.fillStyle=grad; ctx.beginPath(); ctx.moveTo(pts[0][0],H);
-  pts.forEach(p=>ctx.lineTo(p[0],p[1])); ctx.lineTo(pts[pts.length-1][0],H); ctx.fill();
+  grad.addColorStop(0,'rgba(45,106,79,.25)');
+  grad.addColorStop(1,'rgba(45,106,79,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.moveTo(pts[0][0], H);
+  pts.forEach(p => ctx.lineTo(p[0], p[1]));
+  ctx.lineTo(pts[pts.length-1][0], H);
+  ctx.fill();
 
   // Line
-  ctx.strokeStyle='#2d6a4f'; ctx.lineWidth=2.5; ctx.shadowBlur=6; ctx.shadowColor='rgba(45,106,79,.5)';
-  ctx.beginPath(); pts.forEach((p,i)=>i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1])); ctx.stroke(); ctx.shadowBlur=0;
+  ctx.strokeStyle = '#2d6a4f';
+  ctx.lineWidth   = 2.5;
+  ctx.shadowBlur  = 6;
+  ctx.shadowColor = 'rgba(45,106,79,.5)';
+  ctx.beginPath();
+  pts.forEach((p,i) => i===0 ? ctx.moveTo(p[0],p[1]) : ctx.lineTo(p[0],p[1]));
+  ctx.stroke();
+  ctx.shadowBlur = 0;
 
   // Dots
-  pts.forEach((p,i)=>{if(i%Math.max(1,Math.floor(pts.length/10))===0){ctx.fillStyle='#2d6a4f';ctx.beginPath();ctx.arc(p[0],p[1],4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(p[0],p[1],2,0,Math.PI*2);ctx.fill();}});
+  const step = Math.max(1, Math.floor(pts.length / 12));
+  pts.forEach((p,i) => {
+    if (i % step === 0) {
+      ctx.fillStyle = '#2d6a4f';
+      ctx.beginPath(); ctx.arc(p[0],p[1],4,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(p[0],p[1],2,0,Math.PI*2); ctx.fill();
+    }
+  });
 
-  // Label waktu
-  ctx.fillStyle='rgba(255,255,255,.3)'; ctx.font='9px Outfit,sans-serif'; ctx.textAlign='center';
-  if (feeds[0]) ctx.fillText(new Date(feeds[0].created_at).toLocaleDateString('id-ID'), 30, H-4);
-  if (feeds[feeds.length-1]) ctx.fillText(new Date(feeds[feeds.length-1].created_at).toLocaleDateString('id-ID'), W-30, H-4);
+  // Label waktu kiri & kanan
+  ctx.fillStyle='rgba(255,255,255,.35)';
+  ctx.font='9px Outfit,sans-serif';
+  ctx.textAlign='center';
+  const tFirst = new Date(events[0].timestamp).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+  const tLast  = new Date(events[events.length-1].timestamp).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+  ctx.fillText(tFirst, 40, H - 3);
+  ctx.fillText(tLast,  W - 40, H - 3);
+
+  // Label Y axis
+  ctx.textAlign = 'right';
+  [0, 25, 50, 75, 100].forEach(v => {
+    const y = toY(v);
+    ctx.fillStyle = 'rgba(255,255,255,.15)';
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.3)';
+    ctx.fillText(v+'%', W - 4, y - 3);
+  });
+}
+
+// Export PDF dari data Firebase
+function exportPDF(date) {
+  const win    = window.open('', '_blank');
+  const events = window.__fb_events || [];
+  const u      = Auth.user() || {};
+  const norm   = calcNorm(u.gender||'male', u.age||25, u.weight||70);
+  const normN  = norm.avg * 9.8;
+  const rows   = events.slice(-30).map(e => {
+    const grip = Math.min(100, Math.round((e.force / normN) * 100));
+    return `<tr><td>${new Date(e.timestamp).toLocaleString('id-ID')}</td><td>${e.force.toFixed(3)} N</td><td>${e.status}</td><td>${grip}%</td></tr>`;
+  }).join('');
+  win.document.write(`<html><head><title>Laporan MMG</title>
+    <style>body{font-family:Arial;padding:30px;}h1{color:#1a472a;}table{width:100%;border-collapse:collapse;}
+    th,td{border:1px solid #ccc;padding:8px;}th{background:#1a472a;color:#fff;}</style></head>
+    <body>
+      <h1>Laporan Monitoring Mechanomyography</h1>
+      <p><b>Pasien:</b> ${u.name||'—'} &nbsp;|&nbsp; <b>Tanggal export:</b> ${new Date().toLocaleDateString('id-ID')}</p>
+      <p><b>Referensi Normal:</b> ${norm.min}–${norm.max} kgf &nbsp;|&nbsp; <b>Rata-rata:</b> ${norm.avg} kgf</p>
+      <h3>Data Kontraksi Sensor FSR</h3>
+      <table><tr><th>Waktu</th><th>Force (N)</th><th>Status</th><th>Grip %</th></tr>
+      ${rows||'<tr><td colspan=4>Belum ada data</td></tr>'}</table>
+      <p style="margin-top:16px;font-size:11px;color:#999">Sistem Monitoring Mechanomyography — BRIN KST Samaun Samadikun</p>
+    </body></html>`);
+  win.document.close();
+  setTimeout(() => win.print(), 500);
 }
 loadHistory();
 </script>

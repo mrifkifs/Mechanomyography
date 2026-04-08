@@ -127,17 +127,18 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 const user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
 
-const norm = calcNorm(user.gender, user.age, user.weight);
 setText('greeting', getGreeting(user.name));
 setText('pav', user.name[0].toUpperCase());
 setText('pname', user.name); setText('pemail', user.email);
 setText('ps-age', user.age+' th'); setText('ps-w', user.weight+' kg');
 setText('ps-h', user.monitored_hand==='right'?'Kanan':'Kiri');
-const normNMin = (norm.min * 9.8).toFixed(1);
-const normNMax = (norm.max * 9.8).toFixed(1);
-const normNAvg = (norm.avg * 9.8).toFixed(1);
-setText('norm-range', normNMin+' – '+normNMax+' N');
-setText('norm-note', `${user.gender==='male'?'Laki-laki':'Perempuan'}, ${user.age} th, ${user.weight} kg — Rata-rata: ${normNAvg} N (Sumber: Jurnal Mathiowetz et al., 1985)`);
+
+// Patokan nilai riil alat
+const normNMax = 600; 
+const normNMin = 390; 
+
+setText('norm-range', normNMin + ' – ' + normNMax + ' N');
+setText('norm-note', `Referensi berdasarkan skala kalibrasi alat fisik (Target Normal: ${normNMax}).`);
 
 function tick() {
   const n=new Date(), h=String(n.getHours()).padStart(2,'0'), m=String(n.getMinutes()).padStart(2,'0');

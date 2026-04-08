@@ -62,7 +62,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
         <div class="lm-row">
           <div class="lm-box">
             <div class="lm-v" id="lm-force" style="color:#20b2aa">—</div>
-            <div class="lm-l">Force (Newton)</div>
+            <div class="lm-l">Force (N)</div>
           </div>
           <div class="lm-box">
             <div class="lm-v" id="lm-status" style="color:var(--accent)">—</div>
@@ -79,10 +79,10 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
         <div class="xs muted" style="margin-bottom:14px;letter-spacing:.1em">NEWTON</div>
         <div class="g-status b-warn" id="g-status">—</div>
         <div style="background:var(--bg2);border-radius:10px;padding:14px;width:100%;margin-top:18px">
-          <div class="card-title" style="margin-bottom:10px">Referensi Normal</div>
+          <div class="card-title" style="margin-bottom:10px">Referensi Normal Alat</div>
           <table class="nr-tbl">
-            <tr><td class="muted">Minimum</td><td id="nr-min">—</td></tr>
-            <tr><td class="muted">Rata-rata</td><td id="nr-avg">—</td></tr>
+            <tr><td class="muted">Minimum Normal</td><td id="nr-min">—</td></tr>
+            <tr><td class="muted">Target Normal</td><td id="nr-avg">—</td></tr>
           </table>
         </div>
       </div>
@@ -103,32 +103,29 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 const user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
 
-const norm   = calcNorm(user.gender, user.age, user.weight);
-const normN  = parseFloat((norm.avg * 9.8).toFixed(2));
-const normMinN = parseFloat((norm.min * 9.8).toFixed(2));
+const normN = 600;       
+const normMinN = 390;    
 
-setText('nr-min', normMinN.toFixed(2) + ' N');
-setText('nr-avg', normN.toFixed(2) + ' N');
+setText('nr-min', normMinN + ' N');
+setText('nr-avg', normN + ' N');
 
-// ── CHART.JS LIGHT THEME ────────────────────────────────────────
 const MAX_POINTS = 40;
 const timeLabels = Array(MAX_POINTS).fill('');
 const forceData  = Array(MAX_POINTS).fill(null);
 
 const ctxLive = document.getElementById('liveChart').getContext('2d');
 const liveGrad = ctxLive.createLinearGradient(0, 0, 0, 220);
-liveGrad.addColorStop(0, 'rgba(32, 178, 170, 0.4)'); // Teal terang
+liveGrad.addColorStop(0, 'rgba(32, 178, 170, 0.4)'); 
 liveGrad.addColorStop(1, 'rgba(32, 178, 170, 0)');
 
 const liveChart = new Chart(ctxLive, {
   type: 'line',
   data: {
     labels: timeLabels,
-    datasets: [
-      {
+    datasets: [{
         label: 'Force (N)',
         data: forceData,
-        borderColor: '#20b2aa', // Teal
+        borderColor: '#20b2aa', 
         borderWidth: 3,
         pointRadius: 0,
         pointHoverRadius: 6,
@@ -136,8 +133,7 @@ const liveChart = new Chart(ctxLive, {
         fill: true,
         backgroundColor: liveGrad,
         tension: 0.4,
-      }
-    ]
+    }]
   },
   options: {
     responsive: true,
@@ -176,13 +172,12 @@ function pushForcePoint(force) {
   liveChart.update('none');
 }
 
-// ── RECORDING & HARDWARE CONTROL ────────────────────────────────
 let sessionId=null, isRec=false, recSec=0, recTmr, buf=[];
 async function toggleRec() {
   const btn = document.getElementById('rec-btn');
   if (!isRec) {
     try {
-      await Firebase.setDevicePower(true); // Menyalakan alat via Firebase
+      await Firebase.setDevicePower(true); 
       try { const r=await API.startSession(); sessionId=r.session.id; } catch {}
       isRec=true; recSec=0; buf=[];
       btn.textContent='⏹ Stop & Matikan Alat'; btn.style.background='var(--red)';
@@ -192,14 +187,13 @@ async function toggleRec() {
   } else {
     clearInterval(recTmr); isRec=false;
     btn.textContent='⏺ Mulai / Nyalakan Alat'; btn.style.background='';
-    await Firebase.setDevicePower(false); // Mematikan alat
+    await Firebase.setDevicePower(false); 
     if(buf.length){try{await API.pushMmgBatch(sessionId,buf);}catch{}}
     try { if(sessionId) await API.endSession(sessionId,{duration_seconds:recSec}); } catch {}
     showToast('Alat dimatikan & Sesi selesai','success'); sessionId=null;
   }
 }
 
-// Export data sesi saat ini menjadi SVG
 function doExportSVG() {
     if (buf.length === 0) {
         showToast('Belum ada data terekam untuk di-export. Mulai sesi terlebih dahulu.', 'error');
@@ -208,33 +202,64 @@ function doExportSVG() {
     exportToSVG(buf, `Grafik Kekuatan Otot - Sesi Berjalan`);
 }
 
-// Export data sesi saat ini menjadi PDF
 function doExportPDF() {
   if (buf.length === 0) {
       showToast('Belum ada data terekam untuk di-export. Mulai sesi terlebih dahulu.', 'error');
       return;
   }
+  
   const win = window.open('', '_blank');
-  const normNAvg = (norm.avg * 9.8).toFixed(2);
-  const rows = buf.map(e => 
-    `<tr><td>${new Date(e.timestamp).toLocaleTimeString('id-ID')}</td><td>${e.force.toFixed(3)} N</td><td>${e.status}</td></tr>`
-  ).join('');
+  
+  const totalData = buf.length;
+  const sum = buf.reduce((acc, curr) => acc + curr.force, 0);
+  const overallAvg = (sum / totalData).toFixed(2);
+
+  let trendText = "Data tidak cukup untuk melihat tren";
+  if (totalData > 5) {
+      const sliceCount = Math.max(Math.floor(totalData * 0.3), 1);
+      const avgFirst = buf.slice(0, sliceCount).reduce((a, b) => a + b.force, 0) / sliceCount;
+      const avgLast = buf.slice(-sliceCount).reduce((a, b) => a + b.force, 0) / sliceCount;
+      const diff = avgLast - avgFirst;
+      
+      if (diff > 5) trendText = "🟢 Kekuatan meningkat selama sesi ini";
+      else if (diff < -5) trendText = "🔴 Mengalami Fatigue (kelelahan menurun) selama sesi";
+      else trendText = "🟡 Kekuatan stabil";
+  }
+
+  const rows = buf.map(e => {
+    let stat = 'Di Bawah Normal';
+    if (e.force >= normN * 0.85) stat = 'Normal';
+    else if (e.force >= normN * 0.65) stat = 'Hampir Normal';
+    return `<tr><td>${new Date(e.timestamp).toLocaleTimeString('id-ID')}</td><td>${e.force.toFixed(3)} N</td><td>${stat}</td></tr>`;
+  }).join('');
   
   win.document.write(`<html><head><title>Laporan MMG Live</title>
-    <style>body{font-family:Arial;padding:30px;}h1{color:#20b2aa;}table{width:100%;border-collapse:collapse;margin-top:20px;}
-    th,td{border:1px solid #ccc;padding:8px;}th{background:#20b2aa;color:#fff;}</style></head>
+    <style>
+      body{font-family:Arial;padding:30px;}h1{color:#20b2aa;}
+      table{width:100%;border-collapse:collapse;margin-top:20px;font-size:14px;}
+      th,td{border:1px solid #ccc;padding:8px;}th{background:#20b2aa;color:#fff;}
+      .summary-box { background: #f9f9f9; border: 1px solid #ddd; padding: 20px; margin-top: 30px; border-radius: 8px; }
+      .summary-box h3 { margin-top: 0; color: #333; margin-bottom: 12px; }
+      .summary-box p { margin: 6px 0; font-size: 15px; }
+    </style></head>
     <body>
       <h1>Laporan Sesi Berjalan Mechanomyography</h1>
       <p><b>Pasien:</b> ${user.name||'—'} &nbsp;|&nbsp; <b>Tanggal:</b> ${new Date().toLocaleDateString('id-ID')}</p>
-      <p><b>Rata-rata Normal:</b> ${normNAvg} N</p>
-      <table><tr><th>Waktu</th><th>Force (N)</th><th>Status</th></tr>
+      <p><b>Target Normal Alat:</b> ${normN}</p>
+      
+      <table><tr><th>Waktu</th><th>Force</th><th>Status</th></tr>
       ${rows}</table>
+
+      <div class="summary-box">
+        <h3>📊 Analisis Sesi Ini</h3>
+        <p><b>Rata-rata Kekuatan Genggaman:</b> ${overallAvg}</p>
+        <p><b>Kondisi Otot (Trend):</b> ${trendText}</p>
+      </div>
     </body></html>`);
   win.document.close();
   setTimeout(() => win.print(), 500);
 }
 
-// ── FIREBASE POLLING ───────────────────────────────────────────
 Firebase.startPolling((data) => {
   const force = data.force;
   pushForcePoint(force);

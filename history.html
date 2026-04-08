@@ -7,7 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 55% 40% at 75% 10%,rgba(26,71,42,.06) 0,transparent 65%);pointer-events:none;}
-.h-chart{height:260px;position:relative;background:#060a0e;border-radius:12px;overflow:hidden;padding:16px 16px 12px;}
+.h-chart{height:300px;position:relative;background:#ffffff;border:1px solid var(--border);border-radius:12px;overflow:hidden;padding:20px;}
 .h-chart canvas{display:block;width:100%!important;height:100%!important;}
 </style>
 </head>
@@ -29,16 +29,13 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 </nav>
 
 <div class="wrap">
-
   <div class="flex jb items-c mb6">
     <div>
       <h1 class="serif" style="font-size:26px;margin-bottom:4px">Riwayat Rehabilitasi</h1>
       <p class="sm muted">Progres kekuatan otot tangan dari waktu ke waktu.</p>
     </div>
-    <button class="btn btn-o" onclick="showToast('Mengekspor data pdf...','success')">Export Pdf</button>
   </div>
 
-  <!-- Summary cards -->
   <div class="g3 mb6">
     <div class="card tc">
       <div class="card-title">Total Sesi</div>
@@ -47,7 +44,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     </div>
     <div class="card tc">
       <div class="card-title">Force Terbaik</div>
-      <div class="serif" style="font-size:44px;color:#2d6a4f" id="s-best">—</div>
+      <div class="serif" style="font-size:44px;color:#20b2aa" id="s-best">—</div>
       <div class="sm muted">Newton</div>
     </div>
     <div class="card tc">
@@ -57,50 +54,31 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     </div>
   </div>
 
-  <!-- Trend chart -->
-  <div class="card mb6">
+  <div class="card mb6" style="background:var(--bg);">
     <div class="flex jb items-c" style="margin-bottom:16px">
-      <div class="card-title" style="margin:0">Tren Kekuatan Force — Data Kontraksi Firebase</div>
-      <div style="display:flex;align-items:center;gap:16px;font-size:11px;color:var(--muted)">
-        <span style="display:flex;align-items:center;gap:5px">
-          <span style="width:24px;height:2px;background:#2d6a4f;display:inline-block;border-radius:2px"></span>Force (N)
-        </span>
-        <span style="display:flex;align-items:center;gap:5px">
-          <span style="width:24px;height:2px;background:rgba(200,75,49,.6);display:inline-block;border-radius:2px;border:1px dashed rgba(200,75,49,.6)"></span>Avg Normal (N)
-        </span>
-      </div>
+      <div class="card-title" style="margin:0">Tren Kekuatan Otot (Newton)</div>
     </div>
     <div class="h-chart">
       <canvas id="gripChart"></canvas>
     </div>
   </div>
 
-  <!-- Sessions table -->
   <div class="card">
     <div class="card-title">Daftar Sesi</div>
     <div style="overflow-x:auto">
       <table class="tbl">
         <thead>
           <tr>
-            <th>Tanggal</th>
+            <th>ID / Tanggal</th>
             <th>Durasi</th>
-            <th>Force Avg</th>
-            <th>Force Max</th>
-            <th>Kontraksi</th>
             <th>Status</th>
-            <th></th>
+            <th>Aksi</th>
           </tr>
         </thead>
         <tbody id="sess-body"></tbody>
       </table>
     </div>
-    <div id="empty-state" class="tc" style="padding:32px;display:none">
-      <div style="font-size:32px;margin-bottom:12px"></div>
-      <div class="sm muted">Belum ada sesi yang tersimpan.<br>Mulai rekam dari halaman MMG Live.</div>
-      <a href="live.html" class="btn btn-p" style="margin-top:16px;display:inline-flex">▶ Mulai Sesi</a>
-    </div>
   </div>
-
 </div>
 <div id="toast"></div>
 
@@ -112,116 +90,81 @@ let forceChartInstance = null;
 
 async function loadHistory() {
   const events = await Firebase.fetchEvents();
-
   let sessions = [];
   try {
     const r = await API.getSessions();
-    if (r.data && r.data.length > 0) {
-      sessions = r.data.map(s => ({
-        date: s.ended_at,
-        dur:  s.duration_seconds || 0,
-        status: s.status || '—'
-      }));
-    }
+    sessions = r.data || [];
   } catch {}
 
-  // Summary langsung dari Newton
   const forces = events.map(e => e.force).filter(f => f > 0);
-  const norm   = calcNorm(user.gender, user.age, user.weight);
-  const normN  = parseFloat((norm.avg * 9.8).toFixed(2));
-
-  setText('s-total', sessions.length || events.length);
+  setText('s-total', sessions.length);
   setText('s-best',  forces.length ? Math.max(...forces).toFixed(3) : '—');
   setText('s-avg',   forces.length ? (forces.reduce((a,b)=>a+b,0)/forces.length).toFixed(3) : '—');
 
-  drawChartFromEvents(events, normN);
-  renderTableFromSessions(sessions, events);
-
-  if (events.length > 0) setTSStatus(true, 'Firebase — data real ✓');
-  else setTSStatus(false, 'Belum ada data dari sensor');
+  drawChartFromEvents(events);
+  renderTable(sessions);
 }
 
-function renderTableFromSessions(sessions, events) {
-  if (!sessions.length && !events.length) { document.getElementById('empty-state').style.display='block'; return; }
-  // Gunakan events Firebase jika sessions kosong
-  const rows = sessions.length ? sessions : events.slice(-20).reverse().map(e => ({
-    date: new Date(e.timestamp).toISOString(),
-    dur: 0,
-    force: e.force,
-    status: e.status
-  }));
-  document.getElementById('sess-body').innerHTML = rows.map(s=>`
+function renderTable(sessions) {
+  document.getElementById('sess-body').innerHTML = sessions.map(s=>`
     <tr>
-      <td>${formatDate(s.date)}</td>
-      <td>${s.dur ? formatDur(s.dur) : '—'}</td>
-      <td style="font-weight:600;color:#2d6a4f">${s.force !== undefined ? parseFloat(s.force).toFixed(3)+' N' : '—'}</td>
-      <td>—</td>
-      <td><span class="badge ${s.status==='Kuat'?'b-ok':s.status==='Sedang'?'b-warn':'b-err'}">${s.status||'—'}</span></td>
+      <td>${formatDate(s.started_at)}</td>
+      <td>${s.duration_seconds ? formatDur(s.duration_seconds) : '—'}</td>
       <td><span class="badge b-ok">Selesai</span></td>
-      <td><button class="btn btn-o btn-sm" onclick="exportPDF()">PDF</button></td>
-    </tr>`).join('');
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-o btn-sm" onclick="exportToSVG(window.__fb_events, 'Riwayat Keseluruhan Sesi')">SVG</button>
+          <button class="btn btn-o btn-sm" onclick="doDelete(${s.id})">Hapus</button>
+        </div>
+      </td>
+    </tr>`).join('') || `<tr><td colspan="4" class="tc muted py-4">Belum ada sesi rekaman.</td></tr>`;
 }
 
-function drawChartFromEvents(events, normN) {
-  if (forceChartInstance) { forceChartInstance.destroy(); forceChartInstance = null; }
+async function doDelete(id) {
+    const pass = prompt("Sesi ini akan dihapus permanen. Masukkan password akun Anda untuk melanjutkan:");
+    if (pass === null) return;
+    if (pass === user.password) {
+        await API.deleteSession(id);
+        showToast('Sesi berhasil dihapus','success');
+        loadHistory();
+    } else {
+        showToast('Password salah! Gagal menghapus','error');
+    }
+}
 
+function drawChartFromEvents(events) {
+  if (forceChartInstance) { forceChartInstance.destroy(); }
   const canvas = document.getElementById('gripChart');
   const ctx    = canvas.getContext('2d');
 
-  if (!events || events.length < 2) {
-    ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,.25)';
-    ctx.font = '13px Outfit, sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('Belum ada data kontraksi dari sensor.', canvas.offsetWidth/2, canvas.offsetHeight/2);
-    ctx.restore();
-    return;
-  }
+  if (!events || events.length < 2) return;
+  window.__fb_events = events; // Simpan untuk export
 
-  window.__fb_events = events;
-
-  const labels = events.map(e =>
-    new Date(e.timestamp).toLocaleString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
-  );
+  const labels = events.map(e => new Date(e.timestamp).toLocaleString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }));
   const forceVals = events.map(e => parseFloat(e.force.toFixed(3)));
 
-  const step = Math.max(1, Math.floor(labels.length / 10));
-  const sparseLabels = labels.map((l, i) => (i % step === 0 ? l : ''));
-
-  const gradient = ctx.createLinearGradient(0, 0, 0, canvas.offsetHeight || 220);
-  gradient.addColorStop(0, 'rgba(45,106,79,0.35)');
-  gradient.addColorStop(1, 'rgba(45,106,79,0)');
+  const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+  gradient.addColorStop(0, 'rgba(32, 178, 170, 0.5)'); // Teal terang
+  gradient.addColorStop(1, 'rgba(32, 178, 170, 0)');
 
   forceChartInstance = new Chart(ctx, {
     type: 'line',
     data: {
-      labels: sparseLabels,
-      datasets: [
-        {
+      labels: labels,
+      datasets: [{
           label: 'Force (N)',
           data: forceVals,
-          borderColor: '#2d6a4f',
-          borderWidth: 2.5,
-          pointBackgroundColor: '#2d6a4f',
-          pointBorderColor: '#fff',
-          pointBorderWidth: 1.5,
-          pointRadius: (c) => (c.dataIndex % step === 0 ? 4 : 0),
+          borderColor: '#20b2aa',
+          borderWidth: 3,
+          pointBackgroundColor: '#fff',
+          pointBorderColor: '#20b2aa',
+          pointBorderWidth: 2,
+          pointRadius: 4,
           pointHoverRadius: 6,
           fill: true,
           backgroundColor: gradient,
-          tension: 0.35,
-        },
-        {
-          label: 'Avg Normal (N)',
-          data: new Array(forceVals.length).fill(normN),
-          borderColor: 'rgba(200,75,49,0.6)',
-          borderWidth: 1.5,
-          borderDash: [6, 4],
-          pointRadius: 0,
-          fill: false,
-          tension: 0,
-        }
-      ]
+          tension: 0.4,
+      }]
     },
     options: {
       responsive: true,
@@ -230,60 +173,27 @@ function drawChartFromEvents(events, normN) {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: 'rgba(6,10,14,0.9)',
-          borderColor: 'rgba(45,106,79,0.4)',
+          backgroundColor: 'rgba(255,255,255,0.95)',
+          borderColor: '#e0e0e0',
           borderWidth: 1,
-          titleColor: 'rgba(255,255,255,0.6)',
-          bodyColor: '#fff',
-          padding: 10,
-          callbacks: {
-            title: (items) => labels[items[0].dataIndex] || '',
-            label: (item) => item.datasetIndex === 0
-              ? ` Force: ${item.raw} N`
-              : ` Avg Normal: ${normN.toFixed(2)} N`
-          }
+          titleColor: '#666',
+          bodyColor: '#333',
+          padding: 10
         }
       },
       scales: {
         x: {
-          ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9, family: 'Outfit, sans-serif' }, maxRotation: 30, autoSkip: false },
-          grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false }
+          ticks: { color: '#888', font: { size: 11, family: 'Outfit, sans-serif' } },
+          grid: { color: 'rgba(0,0,0,0.04)', drawBorder: false }
         },
         y: {
           min: 0,
-          ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9, family: 'Outfit, sans-serif' }, callback: v => v.toFixed(1) + ' N' },
-          grid: { color: 'rgba(255,255,255,0.06)', drawBorder: false }
+          ticks: { color: '#888', font: { size: 11, family: 'Outfit, sans-serif' }, callback: v => v.toFixed(1) + ' N' },
+          grid: { color: 'rgba(0,0,0,0.06)', drawBorder: false }
         }
       }
     }
   });
-}
-
-function exportPDF() {
-  const win    = window.open('', '_blank');
-  const events = window.__fb_events || [];
-  const u      = Auth.user() || {};
-  const norm   = calcNorm(u.gender||'male', u.age||25, u.weight||70);
-  const normNMin = (norm.min * 9.8).toFixed(2);
-  const normNMax = (norm.max * 9.8).toFixed(2);
-  const normNAvg = (norm.avg * 9.8).toFixed(2);
-  const rows = events.slice(-30).map(e =>
-    `<tr><td>${new Date(e.timestamp).toLocaleString('id-ID')}</td><td>${e.force.toFixed(3)} N</td><td>${e.status}</td></tr>`
-  ).join('');
-  win.document.write(`<html><head><title>Laporan MMG</title>
-    <style>body{font-family:Arial;padding:30px;}h1{color:#1a472a;}table{width:100%;border-collapse:collapse;}
-    th,td{border:1px solid #ccc;padding:8px;}th{background:#1a472a;color:#fff;}</style></head>
-    <body>
-      <h1>Laporan Monitoring Mechanomyography</h1>
-      <p><b>Pasien:</b> ${u.name||'—'} &nbsp;|&nbsp; <b>Tanggal export:</b> ${new Date().toLocaleDateString('id-ID')}</p>
-      <p><b>Referensi Normal:</b> ${normNMin}–${normNMax} N &nbsp;|&nbsp; <b>Rata-rata:</b> ${normNAvg} N</p>
-      <h3>Data Kontraksi Sensor FSR</h3>
-      <table><tr><th>Waktu</th><th>Force (N)</th><th>Status</th></tr>
-      ${rows||'<tr><td colspan=3>Belum ada data</td></tr>'}</table>
-      <p style="margin-top:16px;font-size:11px;color:#999">Sistem Monitoring Mechanomyography — BRIN KST Samaun Samadikun</p>
-    </body></html>`);
-  win.document.close();
-  setTimeout(() => win.print(), 500);
 }
 
 loadHistory();

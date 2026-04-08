@@ -12,29 +12,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .det-row:last-child{border-bottom:none;}
 .det-l{color:var(--muted);}
 .det-v{font-weight:500;}
-/* WEEK GRID */
-.week-g{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:20px;}
-.wday{text-align:center;}
-.wday-n{font-size:9px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;}
-.wday-d{width:34px;height:34px;margin:0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;}
-.wd-done{background:var(--accent);color:#fff;}
-.wd-today{background:var(--yellow);color:#fff;}
-.wd-miss{background:var(--red-p);color:var(--red);}
-.wd-fut{background:var(--bg2);color:var(--muted);}
-/* PROGRESS LIST */
-.prog-list{display:flex;flex-direction:column;gap:14px;}
-.prog-item{}
-.prog-h{display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;}
-.prog-n{font-weight:500;}
-.prog-v{color:var(--muted);font-family:'DM Mono',monospace;}
-/* FEATURES */
-.feat-g{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:20px;}
-.feat-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;transition:all .2s;}
-.feat-card:hover{border-color:var(--accent);transform:translateY(-2px);}
-.feat-icon{font-size:26px;margin-bottom:10px;}
-.feat-name{font-size:14px;font-weight:600;margin-bottom:5px;}
-.feat-desc{font-size:12px;color:var(--muted);line-height:1.6;}
-@media(max-width:900px){.prof-layout{grid-template-columns:1fr;}.feat-g{grid-template-columns:1fr 1fr;}}
+@media(max-width:900px){.prof-layout{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
@@ -55,17 +33,15 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 </nav>
 
 <div class="wrap">
-
   <div class="flex jb items-c mb6">
     <div>
-      <h1 class="serif" style="font-size:26px;margin-bottom:4px">Profil & Progres</h1>
-      <p class="sm muted">Data pasien dan perkembangan rehabilitasi.</p>
+      <h1 class="serif" style="font-size:26px;margin-bottom:4px">Profil Pasien</h1>
+      <p class="sm muted">Data pasien dan referensi nilai normal.</p>
     </div>
+    <button class="btn btn-o" onclick="openEdit()">✏️ Edit Profil</button>
   </div>
 
   <div class="prof-layout mb6">
-
-    <!-- Info card -->
     <div>
       <div class="card" style="margin-bottom:16px">
         <div class="big-av" id="pav">?</div>
@@ -76,72 +52,112 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
           <div class="det-row"><span class="det-l">Jenis Kelamin</span><span class="det-v" id="d-gen">—</span></div>
           <div class="det-row"><span class="det-l">Berat Badan</span><span class="det-v" id="d-w">—</span></div>
           <div class="det-row"><span class="det-l">Tangan Monitor</span><span class="det-v" id="d-h">—</span></div>
-          <div class="det-row"><span class="det-l">Kekuatan Min. Normal</span><span class="det-v" id="d-nmin" style="color:var(--accent)">—</span></div>
-          <div class="det-row"><span class="det-l">Kekuatan Avg. Normal</span><span class="det-v" id="d-navg" style="color:var(--accent)">—</span></div>
         </div>
       </div>
     </div>
-
-    <!-- Progress card -->
-    <div style="display:flex;flex-direction:column;gap:16px">
+    
+    <div>
       <div class="card">
-        <div class="card-title">Kehadiran Rehabilitasi Minggu Ini</div>
-        <div class="week-g">
-          <div class="wday"><div class="wday-n">Sen</div><div class="wday-d wd-done">✓</div></div>
-          <div class="wday"><div class="wday-n">Sel</div><div class="wday-d wd-done">✓</div></div>
-          <div class="wday"><div class="wday-n">Rab</div><div class="wday-d wd-done">✓</div></div>
-          <div class="wday"><div class="wday-n">Kam</div><div class="wday-d wd-miss">✗</div></div>
-          <div class="wday"><div class="wday-n">Jum</div><div class="wday-d wd-today">!</div></div>
-          <div class="wday"><div class="wday-n">Sab</div><div class="wday-d wd-fut">·</div></div>
-          <div class="wday"><div class="wday-n">Min</div><div class="wday-d wd-fut">·</div></div>
-        </div>
-        <div class="prog-list" id="prog-list">
-          <div class="prog-item">
-            <div class="prog-h"><span class="prog-n">Kekuatan Otot (Force)</span><span class="prog-v" id="prog-force-lbl">— N → target <span id="prog-target">—</span> N</span></div>
-            <div class="pbar"><div class="pfill" id="prog-force-bar" style="width:0%;background:linear-gradient(to right,#2d6a4f,#e8a838)"></div></div>
-          </div>
+        <div class="card-title">Referensi Kekuatan Normal (Mathiowetz et al.)</div>
+        <p class="sm muted" style="line-height: 1.6; margin-bottom: 20px;">
+          Berdasarkan profil Anda, berikut adalah rentang nilai normal untuk kekuatan otot genggaman menggunakan konversi Newton (N).
+        </p>
+        <div>
+          <div class="det-row" style="font-size: 16px;"><span class="det-l">Minimum Normal</span><span class="det-v" id="d-nmin" style="color:var(--yellow)">—</span></div>
+          <div class="det-row" style="font-size: 16px;"><span class="det-l">Rata-rata Normal</span><span class="det-v" id="d-navg" style="color:#20b2aa; font-weight:bold;">—</span></div>
+          <div class="det-row" style="font-size: 16px;"><span class="det-l">Maksimal Normal</span><span class="det-v" id="d-nmax" style="color:var(--accent)">—</span></div>
         </div>
       </div>
     </div>
   </div>
-
 </div>
+
+<div class="modal-ov" id="edit-m">
+  <div class="modal-box">
+    <h2 class="serif" style="font-size:22px;margin-bottom:16px">Edit Profil</h2>
+    <div class="fg">
+      <label class="flabel">Nama Lengkap</label>
+      <input class="finput" id="edit-name" type="text">
+    </div>
+    <div class="frow">
+      <div class="fg">
+        <label class="flabel">Umur</label>
+        <input class="finput" id="edit-age" type="number">
+      </div>
+      <div class="fg">
+        <label class="flabel">Berat (kg)</label>
+        <input class="finput" id="edit-weight" type="number">
+      </div>
+    </div>
+    <div class="fg">
+      <label class="flabel">Jenis Kelamin</label>
+      <select class="finput" id="edit-gender">
+        <option value="male">Laki-laki</option>
+        <option value="female">Perempuan</option>
+      </select>
+    </div>
+    <div class="fg" style="margin-bottom:24px">
+      <label class="flabel">Tangan Direhabilitasi</label>
+      <select class="finput" id="edit-hand">
+        <option value="right">Kanan</option>
+        <option value="left">Kiri</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:12px;">
+      <button class="btn btn-o btn-full" onclick="closeEdit()">Batal</button>
+      <button class="btn btn-p btn-full" onclick="saveEdit()">Simpan</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
 const user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
 
-const norm   = calcNorm(user.gender, user.age, user.weight);
-const normN  = parseFloat((norm.avg * 9.8).toFixed(2));
-const normMinN = parseFloat((norm.min * 9.8).toFixed(2));
-const normMaxN = parseFloat((norm.max * 9.8).toFixed(2));
+function loadProfileUI() {
+  const norm = calcNorm(user.gender, user.age, user.weight);
+  document.getElementById('pav').textContent = user.name[0].toUpperCase();
+  setText('pname', user.name); setText('pemail', user.email);
+  setText('d-age',  user.age+' tahun');
+  setText('d-gen',  user.gender==='male'?'Laki-laki':'Perempuan');
+  setText('d-w',    user.weight+' kg');
+  setText('d-h',    user.monitored_hand==='right'?'Kanan':'Kiri');
+  
+  setText('d-nmin', (norm.min * 9.8).toFixed(2)+' N');
+  setText('d-navg', (norm.avg * 9.8).toFixed(2)+' N');
+  setText('d-nmax', (norm.max * 9.8).toFixed(2)+' N');
+}
 
-document.getElementById('pav').textContent = user.name[0].toUpperCase();
-setText('pname', user.name); setText('pemail', user.email);
-setText('d-age',  user.age+' tahun');
-setText('d-gen',  user.gender==='male'?'Laki-laki':'Perempuan');
-setText('d-w',    user.weight+' kg');
-setText('d-h',    user.monitored_hand==='right'?'Tangan Kanan':'Tangan Kiri');
-setText('d-nmin', normMinN.toFixed(2)+' N');
-setText('d-navg', normN.toFixed(2)+' N');
-setText('prog-target', normN.toFixed(2));
+function openEdit() {
+  document.getElementById('edit-name').value = user.name;
+  document.getElementById('edit-age').value = user.age;
+  document.getElementById('edit-weight').value = user.weight;
+  document.getElementById('edit-gender').value = user.gender;
+  document.getElementById('edit-hand').value = user.monitored_hand;
+  document.getElementById('edit-m').classList.add('show');
+}
 
-// Load force terbaru dari Firebase untuk progress bar
-(async () => {
-  const latest = await Firebase.fetchLatest();
-  if (latest && latest.force > 0) {
-    const force = latest.force;
-    const pct = Math.min(100, Math.round((force / normN) * 100));
-    setText('prog-force-lbl', force.toFixed(3) + ' N → target ' + normN.toFixed(2) + ' N');
-    document.getElementById('prog-target').textContent = normN.toFixed(2);
-    const bar = document.getElementById('prog-force-bar');
-    bar.style.width = pct + '%';
-    bar.style.background = pct >= 85 ? '#2d6a4f' : pct >= 65 ? '#e8a838' : '#c84b31';
-  } else {
-    setText('prog-force-lbl', '— N → target ' + normN.toFixed(2) + ' N');
-  }
-})();
+function closeEdit() { document.getElementById('edit-m').classList.remove('show'); }
+
+async function saveEdit() {
+  const updated = {
+    name: document.getElementById('edit-name').value,
+    age: parseInt(document.getElementById('edit-age').value),
+    weight: parseFloat(document.getElementById('edit-weight').value),
+    gender: document.getElementById('edit-gender').value,
+    monitored_hand: document.getElementById('edit-hand').value
+  };
+  await API.updateProfile(updated);
+  Object.assign(user, updated);
+  Auth.fillTopbar();
+  loadProfileUI();
+  closeEdit();
+  showToast('Profil berhasil diperbarui!', 'success');
+}
+
+loadProfileUI();
 </script>
 </body>
 </html>

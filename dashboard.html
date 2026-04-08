@@ -5,9 +5,7 @@
 <title>Dashboard — Mechanomyography</title>
 <script src="shared.js"></script>
 <style>
-/* PAGE BG */
 body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 60% 40% at 80% 10%,rgba(26,71,42,.06) 0,transparent 65%),radial-gradient(ellipse 50% 40% at 10% 90%,rgba(200,75,49,.04) 0,transparent 65%);pointer-events:none;}
-/* PROFILE CARD */
 .prof-card{background:var(--accent);border:none;color:#fff;}
 .prof-card .card-title{color:rgba(255,255,255,.5);}
 .prof-main{display:flex;align-items:center;gap:16px;margin-bottom:20px;}
@@ -22,7 +20,6 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .norm-box-t{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:8px;}
 .norm-v{font-family:'DM Mono',monospace;font-size:26px;font-weight:500;}
 .norm-note{font-size:11px;color:rgba(255,255,255,.55);margin-top:5px;line-height:1.5;}
-/* WATCH */
 .watch-card{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;}
 .wb{width:60px;background:#2c3e50;border:1px solid rgba(255,255,255,.1);margin:0 auto;}
 .wb-t{height:44px;border-radius:5px 5px 0 0;}
@@ -31,33 +28,17 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .wcrown{position:absolute;right:-9px;top:50%;transform:translateY(-50%);width:9px;height:30px;background:#374855;border-radius:0 4px 4px 0;border:1px solid rgba(255,255,255,.07);border-left:none;}
 .wscreen{width:calc(100% - 16px);height:calc(100% - 16px);border-radius:33%;background:#060a0e;overflow:hidden;position:relative;}
 .wscreen::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.07) 2px,rgba(0,0,0,.07) 4px);pointer-events:none;z-index:5;}
-.wface{position:absolute;inset:0;padding:15px 13px;display:flex;flex-direction:column;z-index:3;}
-.wf-time{font-family:'DM Mono',monospace;font-size:36px;font-weight:500;color:#fff;letter-spacing:-2px;line-height:1;margin-bottom:2px;}
-.wf-date{font-size:8px;color:rgba(255,255,255,.35);letter-spacing:.1em;margin-bottom:9px;}
-.wf-pills{display:flex;gap:5px;margin-bottom:8px;}
-.wf-pill{background:rgba(45,106,79,.3);border:1px solid rgba(45,106,79,.5);color:#a8e6c0;font-size:7px;padding:2px 7px;border-radius:20px;letter-spacing:.08em;}
-.wf-pill.r{background:rgba(200,75,49,.3);border-color:rgba(200,75,49,.5);color:#ffaa99;}
-.wf-wave{height:28px;margin-bottom:8px;position:relative;}
-.wf-wave canvas{position:absolute;inset:0;width:100%!important;height:100%!important;}
-.wf-metrics{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:auto;}
-.wf-m{background:rgba(255,255,255,.06);border-radius:6px;padding:6px;}
-.wf-ml{font-size:6px;color:rgba(255,255,255,.3);letter-spacing:.1em;text-transform:uppercase;}
-.wf-mv{font-size:14px;font-family:'DM Mono',monospace;color:#4aeaaa;font-weight:500;}
-.wf-mu{font-size:6px;color:rgba(255,255,255,.25);}
-.watch-note{font-size:11px;color:var(--muted);text-align:center;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:6px;}
-.sdot{width:6px;height:6px;background:#2d6a4f;border-radius:50%;animation:blink 1.5s infinite;}
-/* MINI STAT */
+.wface{position:absolute;inset:0;padding:15px 13px;display:flex;align-items:center;justify-content:center;z-index:3;}
+.wf-time{font-family:'DM Mono',monospace;font-size:52px;font-weight:500;color:#fff;letter-spacing:-2px;line-height:1;}
 .mini-v{font-family:'DM Serif Display',serif;font-size:40px;margin-bottom:4px;}
 .mini-u{font-size:12px;color:var(--muted);margin-bottom:10px;}
-/* GRID */
 .d-main{display:grid;grid-template-columns:1.25fr 1fr;gap:20px;margin-bottom:20px;}
-.d-bot{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;}
+.d-bot{display:grid;grid-template-columns:1fr 1.5fr;gap:20px;}
 @media(max-width:900px){.d-main,.d-bot{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
 
-<!-- TOPBAR -->
 <nav class="topbar">
   <a class="logo" href="dashboard.html">Mechanomyography</a>
   <div class="topbar-nav">
@@ -74,8 +55,6 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 </nav>
 
 <div class="wrap">
-
-  <!-- Header row -->
   <div class="flex jb items-c mb6">
     <div>
       <h1 class="serif" style="font-size:26px;margin-bottom:4px" id="greeting">Selamat datang 👋</h1>
@@ -84,10 +63,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     <a class="btn btn-p" href="live.html">▶ Mulai Sesi</a>
   </div>
 
-  <!-- Main grid -->
   <div class="d-main">
-
-    <!-- Profile card -->
     <div class="card prof-card">
       <div class="card-title">Profil Pasien</div>
       <div class="prof-main">
@@ -109,85 +85,51 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
       </div>
     </div>
 
-    <!-- Watch preview -->
     <div class="card watch-card">
-      <div class="card-title" style="text-align:center">MMG Watch Preview</div>
+      <div class="card-title" style="text-align:center">MMG Watch</div>
       <div class="wb wb-t"></div>
       <div class="wcase">
         <div class="wcrown"></div>
         <div class="wscreen">
           <div class="wface">
             <div class="wf-time" id="wf-t">00:00</div>
-            <div class="wf-date" id="wf-d">—</div>
-            <div class="wf-pills">
-              <span class="wf-pill">● AKTIF</span>
-              <span class="wf-pill r" id="wf-fat">FAT —%</span>
-            </div>
-            <div class="wf-wave">
-              <canvas id="wfwc"></canvas>
-            </div>
-            <div class="wf-metrics">
-              <div class="wf-m"><div class="wf-ml">Amp</div><div class="wf-mv" id="wf-amp">—</div><div class="wf-mu">mV</div></div>
-              <div class="wf-m"><div class="wf-ml">Freq</div><div class="wf-mv" id="wf-frq">—</div><div class="wf-mu">Hz</div></div>
-              <div class="wf-m"><div class="wf-ml">Grip</div><div class="wf-mv" id="wf-grp" style="color:#ffd27a">—</div><div class="wf-mu">%</div></div>
-              <div class="wf-m"><div class="wf-ml">Bat</div><div class="wf-mv" style="color:#a8e6c0">87</div><div class="wf-mu">%</div></div>
-            </div>
           </div>
         </div>
       </div>
       <div class="wb wb-b"></div>
-      <div class="watch-note"><div class="sdot"></div>Sensor aktif — pergelangan tangan</div>
     </div>
   </div>
 
-  <!-- Bottom grid -->
   <div class="d-bot">
-
-    <!-- Grip -->
     <div class="card tc">
-      <div class="card-title">Kekuatan Grip</div>
+      <div class="card-title">Kekuatan Otot Terakhir</div>
       <div class="mini-v" id="d-grip" style="color:var(--yellow)">—</div>
-      <div class="mini-u">% dari nilai normal</div>
+      <div class="mini-u">Persentase dari normal</div>
       <div class="pbar mb4"><div class="pfill" id="grip-bar" style="width:0;background:var(--yellow)"></div></div>
       <span class="badge b-warn" id="grip-badge">—</span>
     </div>
 
-    <!-- Fatigue -->
-    <div class="card tc">
-      <div class="card-title">Fatigue Otot</div>
-      <div class="mini-v" id="d-fat" style="color:var(--red)">—</div>
-      <div class="mini-u">%</div>
-      <div class="pbar mb4"><div class="pfill" id="fat-bar" style="width:0;background:linear-gradient(to right,#2d6a4f,#e8a838,#c84b31)"></div></div>
-      <span class="sm muted" id="fat-lbl">—</span>
-    </div>
-
-    <!-- Alerts -->
     <div class="card">
-      <div class="card-title">Alert Terkini</div>
+      <div class="card-title">Status Terkini</div>
       <div id="alert-list"><p class="sm muted">Memuat...</p></div>
       <div style="margin-top:14px">
         <div class="card-title">Sesi Terakhir</div>
         <table style="width:100%;font-size:13px">
           <tr><td class="muted" style="padding:5px 0">Tanggal</td><td id="l-date" style="text-align:right;font-weight:500">—</td></tr>
           <tr><td class="muted" style="padding:5px 0">Durasi</td><td id="l-dur" style="text-align:right;font-weight:500">—</td></tr>
-          <tr><td class="muted" style="padding:5px 0">Grip avg</td><td id="l-grip" style="text-align:right;font-weight:600;color:var(--yellow)">—</td></tr>
         </table>
       </div>
     </div>
   </div>
-
-</div><!-- wrap -->
-<div id="toast"></div>
+</div>
 
 <script>
 const user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
 
-// Profile
 const norm = calcNorm(user.gender, user.age, user.weight);
 setText('greeting', getGreeting(user.name));
 setText('pav', user.name[0].toUpperCase());
-document.getElementById('pav').textContent = user.name[0].toUpperCase();
 setText('pname', user.name); setText('pemail', user.email);
 setText('ps-age', user.age+' th'); setText('ps-w', user.weight+' kg');
 setText('ps-h', user.monitored_hand==='right'?'Kanan':'Kiri');
@@ -195,120 +137,46 @@ const normNMin = (norm.min * 9.8).toFixed(1);
 const normNMax = (norm.max * 9.8).toFixed(1);
 const normNAvg = (norm.avg * 9.8).toFixed(1);
 setText('norm-range', normNMin+' – '+normNMax+' N');
-setText('norm-note', `${user.gender==='male'?'Laki-laki':'Perempuan'}, ${user.age} th, ${user.weight} kg — Rata-rata: ${normNAvg} N (Mathiowetz et al.)`);
+setText('norm-note', `${user.gender==='male'?'Laki-laki':'Perempuan'}, ${user.age} th, ${user.weight} kg — Rata-rata: ${normNAvg} N (Sumber: Jurnal Mathiowetz et al., 1985)`);
 
-// Clock
 function tick() {
   const n=new Date(), h=String(n.getHours()).padStart(2,'0'), m=String(n.getMinutes()).padStart(2,'0');
   setText('wf-t', h+':'+m);
-  const days=['Min','Sen','Sel','Rab','Kam','Jum','Sab'],months=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'];
-  setText('wf-d', days[n.getDay()]+', '+n.getDate()+' '+months[n.getMonth()]+' '+n.getFullYear());
 }
 tick(); setInterval(tick, 1000);
 
-// Load dashboard data from API
 async function loadDash() {
   try {
     const r = await API.getProgressReport();
     const grip = r.latest_grip_pct ?? 0;
-    const fat  = r.latest_fatigue_pct ?? 0;
-    const sess = r.total_sessions ?? 0;
-    applyMetrics(grip, fat);
+    applyMetrics(grip);
     if (r.last_session) {
       setText('l-date', formatDate(r.last_session.ended_at));
       setText('l-dur',  formatDur(r.last_session.duration_seconds||0));
-      setText('l-grip', (r.last_session.avg_grip_pct??'—')+'%');
     }
-    renderAlerts(r.alerts||[], grip, fat);
+    renderAlerts(grip);
   } catch {
-    // Tidak ada data — tampil kosong saja
-    renderAlerts([], 0, 0);
+    renderAlerts(0);
   }
 }
 
-function applyMetrics(grip, fat) {
-  setText('d-grip', grip+'%'); setText('wf-grp', grip);
+function applyMetrics(grip) {
+  setText('d-grip', grip+'%');
   document.getElementById('grip-bar').style.width = grip+'%';
   document.getElementById('grip-bar').style.background = grip>=85?'#2d6a4f':grip>=65?'#e8a838':'#c84b31';
   const gb = document.getElementById('grip-badge');
   if (grip>=85) { gb.textContent='Normal'; gb.className='badge b-ok'; }
-  else if (grip>=65) { gb.textContent='⚠ Hampir Normal'; gb.className='badge b-warn'; }
+  else if (grip>=65) { gb.textContent='Hampir Normal'; gb.className='badge b-warn'; }
   else { gb.textContent='Di Bawah Normal'; gb.className='badge b-err'; }
-
-  setText('d-fat', fat+'%'); setText('wf-fat', 'FAT '+fat+'%');
-  document.getElementById('fat-bar').style.width = fat+'%';
-  setText('fat-lbl', fat<40?'Otot segar':fat<65?'Mulai lelah':'⚠ Perlu istirahat');
 }
 
-function renderAlerts(alerts, grip, fat) {
+function renderAlerts(grip) {
   const items = [];
-  if (grip < 65) items.push(`<div class="alrt alrt-warn"><span></span><div>Kekuatan grip ${grip}% di bawah nilai normal minimum.</div></div>`);
-  if (fat > 65)  items.push(`<div class="alrt alrt-err"><span></span><div>Fatigue otot tinggi (${fat}%) — disarankan istirahat.</div></div>`);
-  alerts.forEach(a => items.push(`<div class="alrt alrt-warn"><span>${a.icon||''}</span><div>${a.message}</div></div>`));
-  if (!items.length) items.push(`<div class="alrt alrt-ok"><span></span><div>Semua kondisi otot baik saat ini.</div></div>`);
-  document.getElementById('alert-list').innerHTML = items.slice(0,3).join('');
+  if (grip > 0 && grip < 65) items.push(`<div class="alrt alrt-warn"><span></span><div>Kekuatan otot ${grip}% di bawah nilai normal.</div></div>`);
+  if (!items.length) items.push(`<div class="alrt alrt-ok"><span></span><div>Semua kondisi otot terpantau baik.</div></div>`);
+  document.getElementById('alert-list').innerHTML = items.join('');
 }
-
 loadDash();
-
-// ── WATCH WAVE — buffer data real dari ThingSpeak ──
-let watchHistory = [];  // array amplitude ADC nyata
-let latestAmp    = 0;
-
-function drawWatchReal() {
-  const canvas = document.getElementById('wfwc');
-  if (!canvas || !canvas.offsetWidth) return;
-  canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight;
-  const ctx = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
-  ctx.clearRect(0, 0, W, H);
-
-  if (watchHistory.length < 2) {
-    ctx.strokeStyle = 'rgba(74,234,170,.15)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
-    return;
-  }
-
-  const vals = watchHistory;
-  const dMin = Math.max(0,   Math.min(...vals) - 10);
-  const dMax = Math.min(1023, Math.max(...vals) + 10);
-  const toY  = v => H - 2 - ((v-dMin) / Math.max(dMax-dMin,1)) * (H-4);
-  const pts  = vals.map((v,i) => [i/(vals.length-1)*W, toY(v)]);
-
-  const grad = ctx.createLinearGradient(0,0,0,H);
-  grad.addColorStop(0,'rgba(74,234,170,.2)'); grad.addColorStop(1,'rgba(74,234,170,0)');
-  ctx.fillStyle = grad; ctx.beginPath();
-  ctx.moveTo(pts[0][0],H); pts.forEach(p=>ctx.lineTo(p[0],p[1]));
-  ctx.lineTo(pts[pts.length-1][0],H); ctx.closePath(); ctx.fill();
-
-  ctx.strokeStyle = 'rgba(74,234,170,.8)'; ctx.lineWidth = 1.5;
-  ctx.shadowBlur  = 4; ctx.shadowColor = '#4aeaaa';
-  ctx.beginPath(); pts.forEach((p,i)=>i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1]));
-  ctx.stroke(); ctx.shadowBlur = 0;
-}
-setInterval(drawWatchReal, 500);
-
-// ── LOAD data historis untuk watch mini-chart ──
-(async function initWatch() {
-  const feeds = await ThingSpeak.fetchFeeds();
-  if (feeds && feeds.length > 0) {
-    watchHistory = feeds.slice(-30).map(f => f.amplitude);
-    latestAmp = watchHistory[watchHistory.length-1] || 0;
-    setText('wf-amp', latestAmp.toFixed(0));
-    drawWatchReal();
-    setTSStatus(true, 'ThingSpeak — sensor terhubung ✓');
-  } else {
-    setTSStatus(false, 'Menunggu data sensor...');
-  }
-})();
-
-// ── POLLING 15 detik — tambah titik baru ke watch ──
-ThingSpeak.startPolling((data) => {
-  latestAmp = data.amplitude;
-  watchHistory.push(data.amplitude);
-  if (watchHistory.length > 30) watchHistory.shift();
-  setText('wf-amp', data.amplitude.toFixed(0));
-  setTSStatus(true, 'ThingSpeak — sensor aktif ✓');
-}, 15000);
 </script>
 </body>
 </html>

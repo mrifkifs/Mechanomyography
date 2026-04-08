@@ -1,15 +1,12 @@
 /* ================================================
    Mechanomyography — Shared JS
-   Platform: ThingSpeak IoT
-   Field: field1 = amplitude (ADC) saja
    ================================================ */
 
-// ── FIREBASE REALTIME DATABASE ───────────────────────────────
 const FB_URL      = 'https://send-mmg-default-rtdb.asia-southeast1.firebasedatabase.app';
 const FB_REALTIME = `${FB_URL}/fsr/realtime.json`;
 const FB_EVENTS   = `${FB_URL}/fsr/event.json?orderBy="$key"&limitToLast=50`;
+const FB_CONTROL  = `${FB_URL}/fsr/control.json`;
 
-// ── OFFLINE DB ────────────────────────────────────────────────
 const DB = {
   getUsers:     () => JSON.parse(localStorage.getItem('myo_users')    || '[]'),
   saveUsers:    (u) => localStorage.setItem('myo_users',    JSON.stringify(u)),
@@ -17,13 +14,11 @@ const DB = {
   saveSessions: (s) => localStorage.setItem('myo_sessions', JSON.stringify(s)),
 };
 
-// ── API AUTH & SESSIONS ───────────────────────────────────────
 const API = {
   register: async (p) => {
     const users = DB.getUsers();
     if (users.find(u => u.email === p.email)) throw new Error('Email sudah terdaftar.');
-    const user = { id: Date.now(), name: p.name, email: p.email, password: p.password,
-      age: p.age, weight: p.weight, gender: p.gender, monitored_hand: p.monitored_hand };
+    const user = { id: Date.now(), ...p };
     users.push(user); DB.saveUsers(users);
     return { token: 'local_' + Date.now(), user };
   },
@@ -32,12 +27,19 @@ const API = {
     if (!user) throw new Error('Email atau password salah.');
     return { token: 'local_' + Date.now(), user };
   },
+  updateProfile: async (updatedData) => {
+    const users = DB.getUsers();
+    const idx = users.findIndex(u => u.id === Auth.user().id);
+    if (idx > -1) {
+      users[idx] = { ...users[idx], ...updatedData };
+      DB.saveUsers(users);
+      Auth.save(localStorage.getItem('myo_token'), users[idx]);
+    }
+  },
   logout:     async () => ({ message: 'ok' }),
-  getProfile: async () => ({ user: Auth.user() }),
   startSession: async () => {
     const sessions = DB.getSessions();
-    const session = { id: Date.now(), user_id: Auth.user()?.id,
-                      started_at: new Date().toISOString(), ended_at: null };
+    const session = { id: Date.now(), user_id: Auth.user()?.id, started_at: new Date().toISOString(), ended_at: null };
     sessions.push(session); DB.saveSessions(sessions);
     return { session };
   },
@@ -47,40 +49,35 @@ const API = {
     if (idx !== -1) { sessions[idx] = { ...sessions[idx], ended_at: new Date().toISOString(), ...summary }; DB.saveSessions(sessions); }
     return { session: sessions[idx] };
   },
+  deleteSession: async (id) => {
+    let sessions = DB.getSessions();
+    sessions = sessions.filter(s => s.id != id);
+    DB.saveSessions(sessions);
+  },
   getSessions: async () => {
     const uid = Auth.user()?.id;
     const all = DB.getSessions().filter(s => s.user_id == uid && s.ended_at).reverse();
     return { data: all, total: all.length };
   },
-  pushMmgBatch:      async (sid, readings) => ({ saved: readings.length }),
+  pushMmgBatch: async (sid, readings) => ({ saved: readings.length }),
   getProgressReport: async () => {
     const uid      = Auth.user()?.id;
     const sessions = DB.getSessions().filter(s => s.user_id == uid && s.ended_at).reverse();
     const last     = sessions[0] || null;
-    return { latest_grip_pct: last?.avg_grip_pct ?? null, latest_fatigue_pct: last?.avg_fatigue_pct ?? null,
-             total_sessions: sessions.length, last_session: last, alerts: [] };
-  },
-  getNormative: async (g, a, w) => calcNorm(g, parseInt(a), parseFloat(w)),
+    return { latest_grip_pct: last?.avg_grip_pct ?? null, total_sessions: sessions.length, last_session: last, alerts: [] };
+  }
 };
 
-// ── FIREBASE FETCH ────────────────────────────────────────────
 const Firebase = {
-  // Ambil data realtime terbaru (force + status)
   fetchLatest: async () => {
     try {
       const res = await fetch(FB_REALTIME);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       if (!json || json.force === undefined) return null;
-      return {
-        force:     parseFloat(json.force  || 0),
-        status:    json.status || '—',
-        timestamp: Date.now(),
-      };
-    } catch (e) { console.warn('[Firebase] fetchLatest:', e.message); return null; }
+      return { force: parseFloat(json.force || 0), status: json.status || '—', timestamp: Date.now() };
+    } catch (e) { return null; }
   },
-
-  // Ambil event kontraksi untuk grafik historis
   fetchEvents: async () => {
     try {
       const res = await fetch(FB_EVENTS);
@@ -88,14 +85,10 @@ const Firebase = {
       const json = await res.json();
       if (!json) return [];
       return Object.entries(json).map(([key, val]) => ({
-        force:     parseFloat(val.force  || 0),
-        status:    val.status || '—',
-        timestamp: parseInt(key),
+        force: parseFloat(val.force || 0), status: val.status || '—', timestamp: parseInt(key),
       })).sort((a,b) => a.timestamp - b.timestamp);
-    } catch (e) { console.warn('[Firebase] fetchEvents:', e.message); return []; }
+    } catch (e) { return []; }
   },
-
-  // Polling realtime setiap 2 detik (Firebase jauh lebih cepat dari ThingSpeak)
   startPolling: (callback, intervalMs = 2000) => {
     let lastForce = -1;
     const poll = async () => {
@@ -103,20 +96,20 @@ const Firebase = {
       if (data && data.force !== lastForce) {
         lastForce = data.force;
         callback(data);
-        setTSStatus(true, 'Firebase — sensor terhubung ✓');
+        setTSStatus(true, 'Sensor terhubung ✓');
       }
     };
     poll();
     const timer = setInterval(poll, intervalMs);
     return () => clearInterval(timer);
   },
+  setDevicePower: async (isOn) => {
+    try {
+      await fetch(FB_CONTROL, { method: 'PUT', body: JSON.stringify({ power: isOn ? 1 : 0 }) });
+    } catch(e) { console.warn("Gagal mengirim perintah ke alat"); }
+  }
 };
 
-// Alias untuk backward compat
-const ThingSpeak = Firebase;
-const Antares    = Firebase;
-
-// ── AUTH ──────────────────────────────────────────────────────
 const Auth = {
   save:         (token, user) => { localStorage.setItem('myo_token', token); localStorage.setItem('myo_user', JSON.stringify(user)); },
   user:         () => { try { return JSON.parse(localStorage.getItem('myo_user')); } catch { return null; } },
@@ -127,7 +120,6 @@ const Auth = {
   logout: async () => { try { await API.logout(); } catch {} Auth.clear(); location.href = 'login.html'; }
 };
 
-// ── UTILS ─────────────────────────────────────────────────────
 function showToast(msg, type='info') { const t=document.getElementById('toast'); if(!t) return; t.textContent=msg; t.style.background=type==='error'?'#c84b31':type==='success'?'#2d6a4f':'#1c1a17'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3200); }
 function setText(id, val) { const e=document.getElementById(id); if(e) e.textContent=val; }
 function formatDate(iso) { if(!iso) return '—'; const d=new Date(iso); return `${['Min','Sen','Sel','Rab','Kam','Jum','Sab'][d.getDay()]}, ${d.getDate()} ${['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][d.getMonth()]} ${d.getFullYear()}`; }
@@ -139,20 +131,36 @@ function calcNorm(gender, age, weight) {
   const base = r.b*(0.7+0.3*(weight/(gender==='male'?70:60)));
   return { min:Math.round(base*0.8*10)/10, avg:Math.round(base*10)/10, max:Math.round(base*1.2*10)/10 };
 }
-function drawWave(canvas, color, offset) {
-  if(!canvas||!canvas.offsetWidth) return;
-  canvas.width=canvas.offsetWidth; canvas.height=canvas.offsetHeight;
-  const ctx=canvas.getContext('2d'), W=canvas.width, H=canvas.height;
-  ctx.clearRect(0,0,W,H); ctx.strokeStyle=color; ctx.lineWidth=1.8; ctx.shadowBlur=10; ctx.shadowColor=color;
-  ctx.beginPath();
-  for(let x=0;x<W;x++) { const t=(x+offset)*0.042; const y=H/2+18*(Math.sin(t)+0.28*Math.sin(t*2.4)); x===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }
-  ctx.stroke();
-}
-function updateGauge(arcId, pct) { const a=document.getElementById(arcId); if(!a) return; a.setAttribute('stroke-dashoffset',252-(pct/100)*252); a.setAttribute('stroke',pct>=85?'#2d6a4f':pct>=65?'#e8a838':'#c84b31'); }
-function setTSStatus(connected, msg) { const el=document.getElementById('antares-status'); const lbl=document.getElementById('antares-label'); if(!el||!lbl) return; lbl.textContent=msg||(connected?'Firebase — sensor terhubung':'Menunggu data sensor...'); el.classList.toggle('err',!connected); el.classList.add('show'); }
-function setAntaresStatus(c, m) { setTSStatus(c, m); }
+function setTSStatus(connected, msg) { const el=document.getElementById('antares-status'); const lbl=document.getElementById('antares-label'); if(!el||!lbl) return; lbl.textContent=msg||(connected?'Sensor terhubung':'Menunggu data sensor...'); el.classList.toggle('err',!connected); el.classList.add('show'); }
 
-// ── CSS + FONTS ───────────────────────────────────────────────
+// SVG Export Generator
+function exportToSVG(dataArr, titleText) {
+    if (!dataArr || dataArr.length === 0) { showToast('Tidak ada data untuk diexport','error'); return; }
+    const W = 800, H = 400, pad = 50;
+    const maxVal = Math.max(...dataArr.map(d => d.force), 10);
+    
+    let pathD = "";
+    dataArr.forEach((d, i) => {
+        const x = pad + (i / (dataArr.length - 1 || 1)) * (W - pad * 2);
+        const y = H - pad - (d.force / maxVal) * (H - pad * 2);
+        pathD += (i === 0 ? `M ${x} ${y} ` : `L ${x} ${y} `);
+    });
+
+    const svgStr = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="background:#ffffff; font-family:sans-serif;">
+            <rect width="100%" height="100%" fill="#ffffff"/>
+            <text x="${W/2}" y="30" text-anchor="middle" font-size="20" font-weight="bold" fill="#333">${titleText}</text>
+            <text x="${W/2}" y="50" text-anchor="middle" font-size="14" fill="#666">Max Force: ${maxVal.toFixed(2)} N</text>
+            <line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="#ccc" stroke-width="2"/>
+            <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${H-pad}" stroke="#ccc" stroke-width="2"/>
+            <path d="${pathD}" fill="none" stroke="#20b2aa" stroke-width="3" stroke-linejoin="round"/>
+        </svg>
+    `;
+    const win = window.open('', '_blank');
+    win.document.write(`<html><body style="margin:0;display:flex;justify-content:center;align-items:center;height:100vh;background:#f0f0f0;">${svgStr}</body></html>`);
+    win.document.close();
+}
+
 (function injectCSS() {
   if(document.getElementById('myo-shared-css')) return;
   const s=document.createElement('style'); s.id='myo-shared-css';
@@ -171,7 +179,6 @@ function setAntaresStatus(c, m) { setTSStatus(c, m); }
   .card-title{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:16px;}
   .g2{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
   .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;}
-  .g-main{display:grid;grid-template-columns:1.3fr 1fr;gap:20px;}
   .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 22px;border-radius:10px;font-family:'Outfit',sans-serif;font-size:14px;font-weight:600;cursor:pointer;border:none;transition:all .2s;text-decoration:none;}
   .btn-p{background:var(--accent);color:#fff;} .btn-p:hover{background:var(--accent-l);}
   .btn-o{background:var(--surface);color:var(--text2);border:1.5px solid var(--border);} .btn-o:hover{border-color:var(--accent);color:var(--accent);}
@@ -181,26 +188,17 @@ function setAntaresStatus(c, m) { setTSStatus(c, m); }
   .flabel{display:block;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text2);margin-bottom:7px;}
   .finput{width:100%;padding:12px 16px;background:var(--surface);border:1.5px solid var(--border);border-radius:10px;font-family:'Outfit',sans-serif;font-size:15px;color:var(--text);outline:none;transition:all .2s;}
   .finput:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(26,71,42,.1);}
-  .frow{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-  .radio-g{display:flex;gap:10px;}
-  .radio-o{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;font-size:14px;transition:all .2s;color:var(--text2);}
-  .radio-o input{display:none;}
-  .radio-o.sel{border-color:var(--accent);background:var(--accent-p);color:var(--accent);font-weight:600;}
   .err-box{background:var(--red-p);border:1px solid rgba(200,75,49,.3);color:var(--red);padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;display:none;}
   .err-box.show{display:block;}
   .alrt{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-radius:10px;font-size:13px;margin-bottom:8px;}
   .alrt-warn{background:var(--yellow-p);border:1px solid rgba(232,168,56,.3);}
   .alrt-ok{background:var(--accent-p);border:1px solid rgba(26,71,42,.2);}
-  .alrt-err{background:var(--red-p);border:1px solid rgba(200,75,49,.2);}
   .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;}
   .b-ok{background:var(--accent-p);color:var(--accent);}
   .b-warn{background:var(--yellow-p);color:var(--yellow);}
   .b-err{background:var(--red-p);color:var(--red);}
   .pbar{height:8px;background:var(--bg2);border-radius:4px;overflow:hidden;}
   .pfill{height:100%;border-radius:4px;transition:width .6s ease;}
-  .wave-wrap{background:#060a0e;border-radius:12px;padding:14px;height:110px;position:relative;overflow:hidden;}
-  .wave-wrap canvas{position:absolute;inset:14px;width:calc(100% - 28px)!important;height:calc(100% - 28px)!important;}
-  .wave-wrap::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,.025) 2px,rgba(255,255,255,.025) 4px);pointer-events:none;}
   .ldot{width:7px;height:7px;background:#c84b31;border-radius:50%;animation:blink 1s infinite;display:inline-block;}
   @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
   .modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:200;}
@@ -223,7 +221,7 @@ function setAntaresStatus(c, m) { setTSStatus(c, m); }
   .flex{display:flex;} .items-c{align-items:center;} .jb{justify-content:space-between;} .gap2{gap:8px;}
   .mt4{margin-top:16px;} .mt6{margin-top:24px;} .mb4{margin-bottom:16px;} .mb6{margin-bottom:24px;}
   .tc{text-align:center;}
-  @media(max-width:900px){.g2,.g3,.g-main{grid-template-columns:1fr;}.topbar-nav{display:none;}.wrap{padding:16px;}}`;
+  @media(max-width:900px){.g2,.g3{grid-template-columns:1fr;}.topbar-nav{display:none;}.wrap{padding:16px;}}`;
   document.head.appendChild(s);
   const l=document.createElement('link'); l.rel='stylesheet'; l.href='https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap'; document.head.prepend(l);
   const badge=document.createElement('div'); badge.id='antares-status'; badge.innerHTML='<div class="adot"></div><span id="antares-label">Menunggu data sensor...</span>'; document.body.appendChild(badge);

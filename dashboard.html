@@ -195,7 +195,7 @@ const normNMin = (norm.min * 9.8).toFixed(1);
 const normNMax = (norm.max * 9.8).toFixed(1);
 const normNAvg = (norm.avg * 9.8).toFixed(1);
 setText('norm-range', normNMin+' – '+normNMax+' N');
-setText('norm-note', `${user.gender==='male'?'Laki-laki':'Perempuan'}, ${user.age} th, ${user.weight} kg — Rata-rata: ${normNAvg} N;
+setText('norm-note', `${user.gender==='male'?'Laki-laki':'Perempuan'}, ${user.age} th, ${user.weight} kg — Rata-rata: ${normNAvg} N (Mathiowetz et al.)`);
 
 // Clock
 function tick() {

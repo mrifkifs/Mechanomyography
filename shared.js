@@ -134,17 +134,73 @@ function calcNorm(gender, age, weight) {
 function setTSStatus(connected, msg) { const el=document.getElementById('antares-status'); const lbl=document.getElementById('antares-label'); if(!el||!lbl) return; lbl.textContent=msg||(connected?'Sensor terhubung':'Menunggu data sensor...'); el.classList.toggle('err',!connected); el.classList.add('show'); }
 
 // SVG Export Generator
+// SVG Export Generator yang Jauh Lebih Detail & Langsung Download
 function exportToSVG(dataArr, titleText) {
-    if (!dataArr || dataArr.length === 0) { showToast('Tidak ada data untuk diexport','error'); return; }
-    const W = 800, H = 400, pad = 50;
-    const maxVal = Math.max(...dataArr.map(d => d.force), 10);
+    if (!dataArr || dataArr.length === 0) { 
+        showToast('Tidak ada data untuk diexport', 'error'); 
+        return; 
+    }
     
+    const W = 900, H = 500, padX = 70, padY = 60;
+    const maxVal = Math.max(...dataArr.map(d => d.force), 10);
+    const minVal = 0; // Mulai dari 0
+
     let pathD = "";
+    let points = "";
+    const stepX = (W - padX * 2) / Math.max(dataArr.length - 1, 1);
+
+    // Membuat garis grafik dan titik-titiknya
     dataArr.forEach((d, i) => {
-        const x = pad + (i / (dataArr.length - 1 || 1)) * (W - pad * 2);
-        const y = H - pad - (d.force / maxVal) * (H - pad * 2);
+        const x = padX + i * stepX;
+        const y = H - padY - (d.force / maxVal) * (H - padY * 2);
         pathD += (i === 0 ? `M ${x} ${y} ` : `L ${x} ${y} `);
+        points += `<circle cx="${x}" cy="${y}" r="4" fill="#20b2aa" stroke="#fff" stroke-width="1.5"/>`;
     });
+
+    // Membuat Garis Bantu (Grid) dan Label Angka Sumbu Y
+    let gridLines = "";
+    let yLabels = "";
+    const ySteps = 5;
+    for(let i=0; i<=ySteps; i++) {
+        const y = H - padY - (i/ySteps) * (H - padY * 2);
+        const val = (maxVal * (i/ySteps)).toFixed(1);
+        gridLines += `<line x1="${padX}" y1="${y}" x2="${W-padX}" y2="${y}" stroke="#e0e0e0" stroke-dasharray="4 4" stroke-width="1"/>`;
+        yLabels += `<text x="${padX - 15}" y="${y + 4}" text-anchor="end" font-size="12" fill="#666" font-family="sans-serif">${val}</text>`;
+    }
+
+    const svgStr = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="background:#ffffff; font-family:sans-serif;">
+            <rect width="100%" height="100%" fill="#ffffff"/>
+            
+            <text x="${W/2}" y="30" text-anchor="middle" font-size="22" font-weight="bold" fill="#333">${titleText}</text>
+            <text x="${W/2}" y="52" text-anchor="middle" font-size="13" fill="#666">Max Force: ${maxVal.toFixed(2)} N | Total Data: ${dataArr.length}</text>
+
+            ${gridLines}
+            <line x1="${padX}" y1="${H-padY}" x2="${W-padX}" y2="${H-padY}" stroke="#888" stroke-width="2"/>
+            <line x1="${padX}" y1="${padY}" x2="${padX}" y2="${H-padY}" stroke="#888" stroke-width="2"/>
+            ${yLabels}
+            
+            <text x="${padX/2 - 10}" y="${H/2}" transform="rotate(-90, ${padX/2 - 10}, ${H/2})" text-anchor="middle" font-size="14" font-weight="bold" fill="#555">Kekuatan (Newton)</text>
+            <text x="${W/2}" y="${H - 20}" text-anchor="middle" font-size="14" font-weight="bold" fill="#555">Titik Perekaman (Waktu)</text>
+
+            <path d="${pathD}" fill="none" stroke="#20b2aa" stroke-width="3" stroke-linejoin="round"/>
+            ${points}
+        </svg>
+    `;
+
+    // Sistem trigger download otomatis
+    const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Grafik_MMG_${new Date().getTime()}.svg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showToast('Grafik SVG berhasil diunduh', 'success');
+}
 
     const svgStr = `
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="background:#ffffff; font-family:sans-serif;">

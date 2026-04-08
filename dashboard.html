@@ -191,8 +191,11 @@ document.getElementById('pav').textContent = user.name[0].toUpperCase();
 setText('pname', user.name); setText('pemail', user.email);
 setText('ps-age', user.age+' th'); setText('ps-w', user.weight+' kg');
 setText('ps-h', user.monitored_hand==='right'?'Kanan':'Kiri');
-setText('norm-range', norm.min+' – '+norm.max+' kgf');
-setText('norm-note', `${user.gender==='male'?'Laki-laki':'Perempuan'}, ${user.age} th, ${user.weight} kg — Rata-rata: ${norm.avg} kgf (Mathiowetz et al.)`);
+const normNMin = (norm.min * 9.8).toFixed(1);
+const normNMax = (norm.max * 9.8).toFixed(1);
+const normNAvg = (norm.avg * 9.8).toFixed(1);
+setText('norm-range', normNMin+' – '+normNMax+' N');
+setText('norm-note', `${user.gender==='male'?'Laki-laki':'Perempuan'}, ${user.age} th, ${user.weight} kg — Rata-rata: ${normNAvg} N (Mathiowetz et al.)`);
 
 // Clock
 function tick() {

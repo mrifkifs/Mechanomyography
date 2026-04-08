@@ -4,44 +4,29 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MMG Live — Mechanomyography</title>
 <script src="shared.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 55% 40% at 80% 15%,rgba(26,71,42,.06) 0,transparent 65%);pointer-events:none;}
-.live-layout{display:grid;grid-template-columns:1fr 310px;gap:20px;}
-.lm-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px;margin-bottom:16px;}
-.lm-box{background:var(--bg2);border-radius:10px;padding:12px;text-align:center;}
-.lm-v{font-family:'DM Mono',monospace;font-size:22px;color:var(--text);}
-.lm-l{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-top:3px;}
-/* HAND */
-.hand-outer{display:flex;gap:24px;align-items:flex-start;}
-.zone-list{display:flex;flex-direction:column;gap:10px;flex:1;}
-.zone-card{background:var(--bg2);border:1.5px solid var(--border);border-radius:12px;padding:13px;cursor:pointer;transition:all .2s;}
-.zone-card:hover{border-color:var(--accent);}
-.zone-card.active{border-color:var(--accent);background:var(--accent-p);}
-.zone-name{font-size:13px;font-weight:600;margin-bottom:6px;}
-.zone-meta{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:5px;}
-/* WRIST SENSOR */
-.wrist-band{width:80px;height:26px;background:linear-gradient(to bottom,#2c3e50,#1a252f);border-radius:6px;border:1.5px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;position:relative;}
-.wrist-band::before{content:'';width:10px;height:10px;background:#1a472a;border-radius:50%;box-shadow:0 0 8px #1a472a;animation:blink 1.5s infinite;}
-/* GAUGE */
-.gauge-wrap{display:flex;flex-direction:column;align-items:center;padding:16px 0;}
-.g-svg{width:190px;height:105px;}
-.g-val{font-family:'DM Serif Display',serif;font-size:30px;}
-.g-unit{font-size:11px;color:var(--muted);}
-.g-status{display:inline-block;padding:6px 18px;border-radius:20px;font-size:13px;font-weight:600;margin:10px 0;}
-.nr-tbl{width:100%;font-size:12px;}
-.nr-tbl td{padding:6px 0;}
-.nr-tbl td:last-child{text-align:right;font-weight:600;font-family:'DM Mono',monospace;}
-/* CTRL ROW */
+.live-layout{display:grid;grid-template-columns:1fr 300px;gap:20px;}
+.lm-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;}
+.lm-box{background:var(--bg2);border-radius:12px;padding:16px;text-align:center;}
+.lm-v{font-family:'DM Mono',monospace;font-size:28px;font-weight:600;}
+.lm-l{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-top:4px;}
+.chart-wrap{background:#060a0e;border-radius:14px;padding:16px;height:200px;position:relative;}
+.hand-outer{display:flex;justify-content:center;padding:8px 0;}
+.g-status{display:inline-block;padding:8px 24px;border-radius:20px;font-size:14px;font-weight:700;margin-top:8px;}
 .ctrl-row{display:flex;align-items:center;gap:12px;margin-bottom:24px;}
 .rec-t{font-family:'DM Mono',monospace;font-size:15px;color:var(--muted);}
-/* MODAL CAL */
 .cal-steps{list-style:none;margin-top:12px;}
 .cal-step{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;color:var(--text2);}
 .cal-step:last-child{border-bottom:none;}
 .cal-step .cicon{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;background:var(--bg2);}
 .cal-step.done .cicon{background:var(--accent-p);color:var(--accent);}
 .cal-step.active .cicon{background:var(--yellow-p);color:var(--yellow);}
-@media(max-width:900px){.live-layout{grid-template-columns:1fr;}.hand-outer{flex-direction:column;}}
+.nr-tbl{width:100%;font-size:12px;}
+.nr-tbl td{padding:6px 0;}
+.nr-tbl td:last-child{text-align:right;font-weight:600;font-family:'DM Mono',monospace;}
+@media(max-width:900px){.live-layout{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
@@ -63,149 +48,113 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 
 <div class="wrap">
 
-  <!-- Header + controls -->
   <div class="ctrl-row">
     <div style="flex:1">
       <h1 class="serif" style="font-size:24px;margin-bottom:3px">Monitoring MMG Live</h1>
       <p class="sm muted">Sensor dipasang di tengah pergelangan tangan.</p>
     </div>
     <span class="rec-t" id="rec-t">00:00</span>
-    <button class="btn btn-p" id="rec-btn" onclick="toggleRec()">Mulai Rekam</button>
+    <button class="btn btn-p" id="rec-btn" onclick="toggleRec()">⏺ Mulai Rekam</button>
     <button class="btn btn-o" onclick="openCal()">⚙ Kalibrasi</button>
   </div>
 
   <div class="live-layout">
     <div>
-      <!-- Waveform -->
+
+      <!-- Chart Realtime -->
       <div class="card" style="margin-bottom:20px">
-        <div class="flex jb items-c" style="margin-bottom:12px">
-          <div class="card-title" style="margin:0">Sinyal MMG Real-Time</div>
+        <div class="flex jb items-c" style="margin-bottom:14px">
+          <div class="card-title" style="margin:0">Sinyal Force Sensor — Real-Time</div>
           <div class="flex items-c gap2 sm" style="color:var(--red)"><div class="ldot"></div> LIVE</div>
         </div>
-        <div class="wave-wrap" style="padding: 0;">
-  <iframe 
-    src="https://muhammadrifki.grafana.net/public-dashboards/0c2be7f4d45f428aa01c443a65269ae4?kiosk" 
-    width="100%" 
-    height="100%" 
-    frameborder="0" 
-    style="border-radius: 12px; pointer-events: none;">
-  </iframe>
-</div>
-        <div class="lm-row" style="grid-template-columns:1fr;">
-          <div class="lm-box"><div class="lm-v" id="lm-a">—</div><div class="lm-l">Force (Newton)</div></div>
+        <div class="chart-wrap">
+          <canvas id="liveChart"></canvas>
+        </div>
+        <div class="lm-row">
+          <div class="lm-box">
+            <div class="lm-v" id="lm-force" style="color:#4aeaaa">—</div>
+            <div class="lm-l">Force (Newton)</div>
+          </div>
+          <div class="lm-box">
+            <div class="lm-v" id="lm-status" style="color:var(--yellow)">—</div>
+            <div class="lm-l">Status Otot</div>
+          </div>
         </div>
       </div>
 
-      <!-- Hand map -->
+      <!-- Peta Tangan -->
       <div class="card">
         <div class="card-title">Peta Aktivitas Otot Tangan</div>
         <div class="hand-outer">
-          <!-- SVG Tangan Full + Ring Sensor MMG -->
-          <div style="display:flex;flex-direction:column;align-items:center;gap:10px;flex-shrink:0">
-            <svg width="190" height="340" viewBox="0 0 190 340">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:14px">
+            <svg width="260" height="460" viewBox="0 0 190 340">
               <defs>
-                <filter id="sglow">
-                  <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
-                  <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
-                </filter>
+                <filter id="sglow"><feGaussianBlur stdDeviation="2.5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                <filter id="glow2"><feGaussianBlur stdDeviation="5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                <linearGradient id="skinGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#f5e6d3"/>
+                  <stop offset="100%" stop-color="#e8d5c0"/>
+                </linearGradient>
+                <linearGradient id="armGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#e8d5c0"/>
+                  <stop offset="100%" stop-color="#d4bfa8"/>
+                </linearGradient>
               </defs>
-
-              <!-- ══ JARI-JARI ══ -->
               <!-- Ibu jari -->
-              <path d="M46 165 C31 160 21 150 24 136 C27 122 38 117 48 128 C54 134 51 148 51 158Z" fill="#ede8df" stroke="#ccc7be" stroke-width="1.5"/>
+              <path d="M46 165 C31 160 21 150 24 136 C27 122 38 117 48 128 C54 134 51 148 51 158Z" fill="url(#skinGrad)" stroke="#ccc7be" stroke-width="1.5"/>
               <!-- Telunjuk -->
-              <rect x="51" y="76" width="22" height="73" rx="10" fill="#ede8df" stroke="#ccc7be" stroke-width="1.5"/>
+              <rect x="51" y="76" width="22" height="73" rx="10" fill="url(#skinGrad)" stroke="#ccc7be" stroke-width="1.5"/>
               <line x1="53" y1="115" x2="71" y2="115" stroke="#ccc7be" stroke-width="1"/>
               <line x1="54" y1="101" x2="70" y2="101" stroke="#ccc7be" stroke-width="1"/>
               <!-- Tengah -->
-              <rect x="75" y="61" width="22" height="88" rx="10" fill="#ede8df" stroke="#ccc7be" stroke-width="1.5"/>
+              <rect x="75" y="61" width="22" height="88" rx="10" fill="url(#skinGrad)" stroke="#ccc7be" stroke-width="1.5"/>
               <line x1="77" y1="111" x2="95" y2="111" stroke="#ccc7be" stroke-width="1"/>
               <line x1="78" y1="97" x2="94" y2="97" stroke="#ccc7be" stroke-width="1"/>
               <!-- Manis -->
-              <rect x="99" y="71" width="21" height="78" rx="10" fill="#ede8df" stroke="#ccc7be" stroke-width="1.5"/>
+              <rect x="99" y="71" width="21" height="78" rx="10" fill="url(#skinGrad)" stroke="#ccc7be" stroke-width="1.5"/>
               <line x1="101" y1="114" x2="118" y2="114" stroke="#ccc7be" stroke-width="1"/>
               <!-- Kelingking -->
-              <rect x="122" y="96" width="18" height="56" rx="9" fill="#ede8df" stroke="#ccc7be" stroke-width="1.5"/>
+              <rect x="122" y="96" width="18" height="56" rx="9" fill="url(#skinGrad)" stroke="#ccc7be" stroke-width="1.5"/>
               <line x1="124" y1="124" x2="138" y2="124" stroke="#ccc7be" stroke-width="1"/>
-
-              <!-- ══ TELAPAK TANGAN ══ -->
+              <!-- Telapak -->
               <rect x="42" y="145" width="108" height="83" rx="14" fill="#f0ebe3" stroke="#d4cfc8" stroke-width="1.5"/>
-
-              <!-- ══ LENGAN BAWAH (panjang ke bawah) ══ -->
-              <rect x="47" y="228" width="96" height="82" rx="6" fill="#e8dfd4" stroke="#ccc7be" stroke-width="1"/>
-
-              <!-- ══ RING SENSOR BAND (oranye, di tengah lengan bawah / forearm) ══ -->
-              <!-- Band utama oranye — digeser ke y=255 (tengah lengan) -->
+              <!-- Pulse ring di telapak -->
+              <circle cx="95" cy="186" r="22" fill="rgba(74,234,170,0.07)">
+                <animate attributeName="r" values="18;30;18" dur="2.2s" repeatCount="indefinite"/>
+                <animate attributeName="opacity" values="0.07;0.18;0.07" dur="2.2s" repeatCount="indefinite"/>
+              </circle>
+              <circle cx="95" cy="186" r="5" fill="rgba(74,234,170,0.4)" filter="url(#sglow)">
+                <animate attributeName="opacity" values="0.4;1;0.4" dur="1.4s" repeatCount="indefinite"/>
+              </circle>
+              <!-- Lengan bawah -->
+              <rect x="47" y="228" width="96" height="82" rx="6" fill="url(#armGrad)" stroke="#ccc7be" stroke-width="1"/>
+              <!-- Band oranye -->
               <rect x="40" y="254" width="110" height="22" rx="4" fill="#e07820" stroke="#c06010" stroke-width="1.5"/>
-              <!-- Highlight band -->
               <rect x="40" y="254" width="110" height="8" rx="4" fill="rgba(255,200,80,.25)"/>
-              <!-- Shadow bawah band -->
               <rect x="40" y="270" width="110" height="6" rx="0" fill="rgba(0,0,0,.12)"/>
-
-              <!-- ══ 5 SENSOR NODE di atas band oranye ══ -->
-
-              <!-- Node S1 — kiri jauh -->
-              <g class="mzone" data-z="0" onclick="selectNode(0)" style="cursor:pointer">
-                <rect x="43" y="246" width="18" height="16" rx="3" fill="#5a5f85" stroke="#9095bb" stroke-width="1.2"/>
-                <rect x="46" y="249" width="12" height="8" rx="2" fill="#c8a84b" stroke="#e8c86a" stroke-width=".8"/>
-                <circle cx="59" cy="247" r="2" fill="#4aeaaa" filter="url(#sglow)">
-                  <animate attributeName="opacity" values="1;0.2;1" dur="1.7s" repeatCount="indefinite"/>
-                </circle>
-                <text x="52" y="243" text-anchor="middle" fill="#5a5649" font-size="7" font-family="Outfit,sans-serif" font-weight="600">S1</text>
-              </g>
-
-              <!-- Node S2 -->
-              <g class="mzone" data-z="1" onclick="selectNode(1)" style="cursor:pointer">
-                <rect x="65" y="246" width="18" height="16" rx="3" fill="#5a5f85" stroke="#9095bb" stroke-width="1.2"/>
-                <rect x="68" y="249" width="12" height="8" rx="2" fill="#c8a84b" stroke="#e8c86a" stroke-width=".8"/>
-                <circle cx="81" cy="247" r="2" fill="#4aeaaa" filter="url(#sglow)">
-                  <animate attributeName="opacity" values="1;0.2;1" dur="2.1s" repeatCount="indefinite"/>
-                </circle>
-                <text x="74" y="243" text-anchor="middle" fill="#5a5649" font-size="7" font-family="Outfit,sans-serif" font-weight="600">S2</text>
-              </g>
-
-              <!-- Node S3 — tengah MAIN, lebih besar -->
-              <g class="mzone" data-z="2" onclick="selectNode(2)" style="cursor:pointer">
-                <rect x="82" y="242" width="26" height="22" rx="4" fill="#6a6fa0" stroke="#9095bb" stroke-width="1.5"/>
-                <rect x="85" y="245" width="20" height="11" rx="2" fill="#04120a" stroke="#2d6a4f" stroke-width=".8"/>
-                <polyline points="86,250 88,247 91,251 94,245 97,249 100,247 103,250" fill="none" stroke="#4aeaaa" stroke-width="1"/>
-                <circle cx="106" cy="244" r="2" fill="#4aeaaa" filter="url(#sglow)">
-                  <animate attributeName="opacity" values="1;0.1;1" dur="1.2s" repeatCount="indefinite"/>
-                </circle>
-                <text x="95" y="240" text-anchor="middle" fill="#5a5649" font-size="7" font-family="Outfit,sans-serif" font-weight="600">MAIN</text>
-              </g>
-
-              <!-- Node S4 -->
-              <g class="mzone" data-z="3" onclick="selectNode(3)" style="cursor:pointer">
-                <rect x="112" y="246" width="18" height="16" rx="3" fill="#5a5f85" stroke="#9095bb" stroke-width="1.2"/>
-                <rect x="115" y="249" width="12" height="8" rx="2" fill="#c8a84b" stroke="#e8c86a" stroke-width=".8"/>
-                <circle cx="128" cy="247" r="2" fill="#4aeaaa" filter="url(#sglow)">
-                  <animate attributeName="opacity" values="1;0.2;1" dur="1.9s" repeatCount="indefinite"/>
-                </circle>
-                <text x="121" y="243" text-anchor="middle" fill="#5a5649" font-size="7" font-family="Outfit,sans-serif" font-weight="600">S4</text>
-              </g>
-
-              <!-- Node S5 — kanan jauh -->
-              <g class="mzone" data-z="4" onclick="selectNode(4)" style="cursor:pointer">
-                <rect x="129" y="246" width="18" height="16" rx="3" fill="#5a5f85" stroke="#9095bb" stroke-width="1.2"/>
-                <rect x="132" y="249" width="12" height="8" rx="2" fill="#c8a84b" stroke="#e8c86a" stroke-width=".8"/>
-                <circle cx="145" cy="247" r="2" fill="#4aeaaa" filter="url(#sglow)">
-                  <animate attributeName="opacity" values="1;0.2;1" dur="2.3s" repeatCount="indefinite"/>
-                </circle>
-                <text x="138" y="243" text-anchor="middle" fill="#5a5649" font-size="7" font-family="Outfit,sans-serif" font-weight="600">S5</text>
-              </g>
-
+              <!-- S1 -->
+              <g><rect x="43" y="246" width="18" height="16" rx="3" fill="#5a5f85" stroke="#9095bb" stroke-width="1.2"/><rect x="46" y="249" width="12" height="8" rx="2" fill="#c8a84b" stroke="#e8c86a" stroke-width=".8"/><circle cx="59" cy="247" r="2.5" fill="#4aeaaa" filter="url(#sglow)"><animate attributeName="opacity" values="1;0.15;1" dur="1.7s" repeatCount="indefinite"/></circle><text x="52" y="243" text-anchor="middle" fill="#999" font-size="7" font-family="Outfit,sans-serif">S1</text></g>
+              <!-- S2 -->
+              <g><rect x="65" y="246" width="18" height="16" rx="3" fill="#5a5f85" stroke="#9095bb" stroke-width="1.2"/><rect x="68" y="249" width="12" height="8" rx="2" fill="#c8a84b" stroke="#e8c86a" stroke-width=".8"/><circle cx="81" cy="247" r="2.5" fill="#4aeaaa" filter="url(#sglow)"><animate attributeName="opacity" values="1;0.15;1" dur="2.1s" repeatCount="indefinite"/></circle><text x="74" y="243" text-anchor="middle" fill="#999" font-size="7" font-family="Outfit,sans-serif">S2</text></g>
+              <!-- MAIN (lebih besar+terang) -->
+              <g><rect x="82" y="242" width="26" height="22" rx="4" fill="#1a3a5c" stroke="#4aeaaa" stroke-width="2"/><rect x="85" y="245" width="20" height="11" rx="2" fill="#04120a" stroke="#2d6a4f" stroke-width=".8"/><polyline points="86,250 88,247 91,251 94,245 97,249 100,247 103,250" fill="none" stroke="#4aeaaa" stroke-width="1.3"/><circle cx="107" cy="244" r="3" fill="#4aeaaa" filter="url(#glow2)"><animate attributeName="opacity" values="1;0.1;1" dur="1.2s" repeatCount="indefinite"/></circle><text x="95" y="239" text-anchor="middle" fill="#4aeaaa" font-size="7.5" font-family="Outfit,sans-serif" font-weight="700">MAIN</text></g>
+              <!-- S4 -->
+              <g><rect x="112" y="246" width="18" height="16" rx="3" fill="#5a5f85" stroke="#9095bb" stroke-width="1.2"/><rect x="115" y="249" width="12" height="8" rx="2" fill="#c8a84b" stroke="#e8c86a" stroke-width=".8"/><circle cx="128" cy="247" r="2.5" fill="#4aeaaa" filter="url(#sglow)"><animate attributeName="opacity" values="1;0.15;1" dur="1.9s" repeatCount="indefinite"/></circle><text x="121" y="243" text-anchor="middle" fill="#999" font-size="7" font-family="Outfit,sans-serif">S4</text></g>
+              <!-- S5 -->
+              <g><rect x="129" y="246" width="18" height="16" rx="3" fill="#5a5f85" stroke="#9095bb" stroke-width="1.2"/><rect x="132" y="249" width="12" height="8" rx="2" fill="#c8a84b" stroke="#e8c86a" stroke-width=".8"/><circle cx="145" cy="247" r="2.5" fill="#4aeaaa" filter="url(#sglow)"><animate attributeName="opacity" values="1;0.15;1" dur="2.3s" repeatCount="indefinite"/></circle><text x="138" y="243" text-anchor="middle" fill="#999" font-size="7" font-family="Outfit,sans-serif">S5</text></g>
+              <text x="95" y="288" text-anchor="middle" fill="rgba(255,255,255,.65)" font-size="8" font-family="Outfit,sans-serif" font-weight="600">MMG RING SENSOR</text>
             </svg>
-            <div class="xs muted" style="text-align:center;line-height:1.6">
-              <span style="display:inline-flex;align-items:center;gap:5px">
-                <span style="width:6px;height:6px;background:#e07820;border-radius:2px;display:inline-block"></span>
-                Klik sensor untuk detail aktivitas
+            <div class="xs muted" style="text-align:center;line-height:2">
+              <span style="display:inline-flex;align-items:center;gap:7px">
+                <span style="width:8px;height:8px;background:#4aeaaa;border-radius:50%;display:inline-block;box-shadow:0 0 8px #4aeaaa"></span>
+                Sensor aktif — pergelangan tangan
+              </span><br>
+              <span style="display:inline-flex;align-items:center;gap:7px">
+                <span style="width:8px;height:8px;background:#e07820;border-radius:2px;display:inline-block"></span>
+                Ring sensor FSR terpasang
               </span>
             </div>
           </div>
-
-          <!-- Zone cards -->
-          <div class="zone-list" id="zone-list"></div>
         </div>
       </div>
     </div>
@@ -213,45 +162,27 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     <!-- Sidebar -->
     <div style="display:flex;flex-direction:column;gap:20px">
 
-      <!-- Gauge -->
-      <div class="card gauge-wrap">
-        <div class="card-title">Kekuatan Grip</div>
-        <svg class="g-svg" viewBox="0 0 190 105">
-          <path d="M 18 92 A 78 78 0 0 1 172 92" fill="none" stroke="#e8e3dc" stroke-width="13" stroke-linecap="round"/>
-          <path id="g-arc" d="M 18 92 A 78 78 0 0 1 172 92" fill="none" stroke="#2d6a4f" stroke-width="13" stroke-linecap="round" stroke-dasharray="252" stroke-dashoffset="100"/>
-          <text x="14" y="105" fill="#9a9489" font-size="9" font-family="Outfit">0</text>
-          <text x="94" y="20" fill="#9a9489" font-size="9" font-family="Outfit" text-anchor="middle">50</text>
-          <text x="176" y="105" fill="#9a9489" font-size="9" font-family="Outfit" text-anchor="end">100%</text>
-        </svg>
-        <div class="g-val" id="g-val">—</div>
-        <div class="g-unit">% dari nilai normal</div>
-        <div class="g-status b-warn badge" id="g-status" style="margin-top:10px">—</div>
-
-        <div style="background:var(--bg2);border-radius:10px;padding:12px;width:100%;margin-top:14px">
-          <div class="card-title" style="margin-bottom:10px">Nilai Normal Referensi</div>
+      <div class="card" style="text-align:center">
+        <div class="card-title">Force Real-Time</div>
+        <div id="s-force-big" style="font-size:52px;font-weight:800;font-family:'DM Mono',monospace;margin:8px 0;line-height:1;color:#4aeaaa;transition:color .3s">—</div>
+        <div class="xs muted" style="margin-bottom:14px;letter-spacing:.1em">NEWTON</div>
+        <div class="g-status b-warn" id="g-status">—</div>
+        <div style="background:var(--bg2);border-radius:10px;padding:14px;width:100%;margin-top:18px">
+          <div class="card-title" style="margin-bottom:10px">Referensi Normal</div>
           <table class="nr-tbl">
             <tr><td class="muted">Minimum</td><td id="nr-min">—</td></tr>
             <tr><td class="muted">Rata-rata</td><td id="nr-avg">—</td></tr>
-            <tr><td class="muted">Estimasi Anda</td><td id="nr-you" style="color:var(--accent)">—</td></tr>
+            <tr><td class="muted">Sensor Anda</td><td id="nr-you" style="color:var(--accent)">—</td></tr>
           </table>
         </div>
       </div>
 
-      <!-- Fatigue -->
-      <div class="card">
-        <div class="card-title">Status Otot</div>
-        <div style="font-size:36px;font-weight:700;text-align:center;margin-bottom:8px" id="fat-n">—</div>
-        <div class="pbar mb4"><div class="pfill" id="fat-b" style="width:0;background:linear-gradient(to right,#2d6a4f,#e8a838,#c84b31)"></div></div>
-        <p class="sm muted tc" id="fat-l">—</p>
-      </div>
-
-      <!-- Quick actions -->
       <div class="card">
         <div class="card-title">Aksi Cepat</div>
         <div style="display:flex;flex-direction:column;gap:8px">
-          <button onclick="openCal()" class="btn btn-o btn-full">Kalibrasi Sensor</button>
-          <button onclick="showToast('Export laporan disiapkan...','success')" class="btn btn-o btn-full">Export Pdf</button>
-          <button onclick="showToast('Fitur bagikan ke dokter segera hadir.','info')" class="btn btn-o btn-full">Bagikan ke Dokter</button>
+          <button onclick="openCal()" class="btn btn-o btn-full">⚙ Kalibrasi Sensor</button>
+          <button onclick="showToast('Export laporan disiapkan...','success')" class="btn btn-o btn-full">📄 Export PDF</button>
+          <button onclick="showToast('Fitur bagikan ke dokter segera hadir.','info')" class="btn btn-o btn-full">👨‍⚕️ Bagikan ke Dokter</button>
         </div>
       </div>
     </div>
@@ -264,11 +195,11 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     <h2 class="serif" style="font-size:22px;margin-bottom:8px">Kalibrasi Sensor</h2>
     <p class="sm muted" style="margin-bottom:16px">Rilekskan tangan sepenuhnya. Jangan bergerak selama kalibrasi.</p>
     <div class="pbar" style="margin-bottom:10px"><div class="pfill" id="cal-fill" style="width:0;background:var(--accent)"></div></div>
-    <ul class="cal-steps" id="cal-steps">
-      <li class="cal-step" data-i="0"><div class="cicon">1</div>Mendeteksi sinyal baseline</li>
-      <li class="cal-step" data-i="1"><div class="cicon">2</div>Mengukur noise floor</li>
-      <li class="cal-step" data-i="2"><div class="cicon">3</div>Menyesuaikan gain sensor</li>
-      <li class="cal-step" data-i="3"><div class="cicon">4</div>Memverifikasi kalibrasi</li>
+    <ul class="cal-steps">
+      <li class="cal-step"><div class="cicon">1</div>Mendeteksi sinyal baseline</li>
+      <li class="cal-step"><div class="cicon">2</div>Mengukur noise floor</li>
+      <li class="cal-step"><div class="cicon">3</div>Menyesuaikan gain sensor</li>
+      <li class="cal-step"><div class="cicon">4</div>Memverifikasi kalibrasi</li>
     </ul>
     <button class="btn btn-p btn-full" id="cal-close" style="margin-top:20px" onclick="closeCal()" disabled>Tutup</button>
   </div>
@@ -280,141 +211,152 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 const user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
 
-const norm = calcNorm(user.gender, user.age, user.weight);
-setText('nr-min', norm.min+' kgf'); setText('nr-avg', norm.avg+' kgf');
+const norm    = calcNorm(user.gender, user.age, user.weight);
+const normN   = parseFloat((norm.avg * 9.8).toFixed(2));
+const normMinN = parseFloat((norm.min * 9.8).toFixed(2));
 
-// ZONE STATE — 6 sensor nodes sesuai alat ring MMG
-const zones = [
-  {name:'S1 — Sensor Dorsal',      pct:0, color:'#4aeaaa'},
-  {name:'S2 — Sensor Radial Atas', pct:0, color:'var(--yellow)'},
-  {name:'S3 — Sensor Ulnar',       pct:0, color:'var(--red)'},
-  {name:'S4 — Sensor Radial Bawah',pct:0, color:'var(--yellow)'},
-  {name:'S5 — Sensor Palmar',      pct:0, color:'#4aeaaa'},
-  {name:'S6 — Modul Utama (Main)', pct:0, color:'#2d6a4f'},
-];
-function renderZones() {
-  document.getElementById('zone-list').innerHTML = zones.map((z,i)=>`
-    <div class="zone-card" id="zc${i}">
-      <div class="zone-name">${z.name}</div>
-      <div class="pbar" style="margin-bottom:5px"><div class="pfill" id="zf${i}" style="width:${z.pct}%;background:${z.color}"></div></div>
-      <div class="zone-meta"><span>Aktivitas Sensor</span><span id="zp${i}" style="font-weight:600;color:${z.color}">${z.pct}%</span></div>
-    </div>`).join('');
-}
-function selectNode(idx) {
-  document.querySelectorAll('.zone-card').forEach((c,i) => c.classList.toggle('active', i === idx));
-}
-renderZones();
+setText('nr-min', normMinN.toFixed(2) + ' N');
+setText('nr-avg', normN.toFixed(2) + ' N');
 
-// RECORDING
-let sessionId=null, isRec=false, recSec=0, recTmr, buf=[], contCount=0;
+// ── CHART.JS REALTIME ──────────────────────────────────────────
+const MAX_POINTS = 40;
+const timeLabels = Array(MAX_POINTS).fill('');
+const forceData  = Array(MAX_POINTS).fill(null);
+
+const ctxLive = document.getElementById('liveChart').getContext('2d');
+const liveGrad = ctxLive.createLinearGradient(0, 0, 0, 170);
+liveGrad.addColorStop(0, 'rgba(74,234,170,0.3)');
+liveGrad.addColorStop(1, 'rgba(74,234,170,0)');
+
+const liveChart = new Chart(ctxLive, {
+  type: 'line',
+  data: {
+    labels: timeLabels,
+    datasets: [
+      {
+        label: 'Force (N)',
+        data: forceData,
+        borderColor: '#4aeaaa',
+        borderWidth: 2.5,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: '#4aeaaa',
+        fill: true,
+        backgroundColor: liveGrad,
+        tension: 0.4,
+      },
+      {
+        label: 'Normal Avg',
+        data: Array(MAX_POINTS).fill(normN),
+        borderColor: 'rgba(232,168,56,0.55)',
+        borderWidth: 1.5,
+        borderDash: [6, 4],
+        pointRadius: 0,
+        fill: false,
+        tension: 0,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 150 },
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: 'rgba(6,10,14,0.92)',
+        borderColor: 'rgba(74,234,170,0.3)',
+        borderWidth: 1,
+        titleColor: 'rgba(255,255,255,0.5)',
+        bodyColor: '#fff',
+        padding: 10,
+        callbacks: {
+          title: () => '',
+          label: (item) => item.datasetIndex === 0
+            ? ` Force: ${item.raw !== null ? item.raw.toFixed(3) + ' N' : '—'}`
+            : ` Avg normal: ${normN.toFixed(2)} N`
+        }
+      }
+    },
+    scales: {
+      x: { ticks: { display: false }, grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false } },
+      y: {
+        min: 0,
+        suggestedMax: normN * 1.5,
+        ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10, family: 'DM Mono, monospace' }, callback: v => v.toFixed(1) + ' N' },
+        grid: { color: 'rgba(255,255,255,0.07)', drawBorder: false }
+      }
+    }
+  }
+});
+
+function pushForcePoint(force) {
+  const now = new Date();
+  timeLabels.push(`${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`);
+  forceData.push(parseFloat(force.toFixed(3)));
+  if (timeLabels.length > MAX_POINTS) { timeLabels.shift(); forceData.shift(); }
+  liveChart.data.datasets[1].data = Array(timeLabels.length).fill(normN);
+  liveChart.update('none');
+}
+
+// ── RECORDING ──────────────────────────────────────────────────
+let sessionId=null, isRec=false, recSec=0, recTmr, buf=[];
 async function toggleRec() {
-  const btn=document.getElementById('rec-btn');
+  const btn = document.getElementById('rec-btn');
   if (!isRec) {
     try {
-      // Coba API dulu, jika gagal (API belum tersedia) tetap bisa jalan
       try { const r=await API.startSession(); sessionId=r.session.id; } catch {}
       isRec=true; recSec=0;
-      btn.textContent='Stop Rekam'; btn.style.background='var(--red)';
-      recTmr=setInterval(()=>{ recSec++; setText('rec-t',formatDur(recSec)); if(recSec%5===0&&buf.length){try{API.pushMmgBatch(sessionId,buf);buf=[];}catch{}} },1000);
+      btn.textContent='⏹ Stop Rekam'; btn.style.background='var(--red)';
+      recTmr=setInterval(()=>{ recSec++; setText('rec-t',formatDur(recSec)); if(recSec%5===0&&buf.length){try{API.pushMmgBatch(sessionId,buf);buf=[];}catch{}}},1000);
       showToast('Sesi rekaman dimulai','success');
-    } catch(e){showToast('Gagal: '+e.message,'error');}
+    } catch(e){ showToast('Gagal: '+e.message,'error'); }
   } else {
     clearInterval(recTmr); isRec=false;
     btn.textContent='⏺ Mulai Rekam'; btn.style.background='';
     if(buf.length){try{await API.pushMmgBatch(sessionId,buf);buf=[];}catch{}}
-    try { if(sessionId) await API.endSession(sessionId,{duration_seconds:recSec,avg_grip_pct:parseInt(document.getElementById('g-val').textContent)||0,avg_fatigue_pct:parseInt(document.getElementById('fat-n').textContent)||0}); } catch{}
+    try { if(sessionId) await API.endSession(sessionId,{duration_seconds:recSec}); } catch {}
     showToast('Sesi selesai & tersimpan','success'); sessionId=null;
   }
 }
 
-// ── WAVEFORM CANVAS — hanya gambar garis datar jika tidak ada data ──
-let wo = 0;
-let latestAmp = 0; // amplitude dari ThingSpeak, 0 = belum ada data
-
-(function waveLoop() {
-  const canvas = document.getElementById('wc');
-  if (canvas && canvas.offsetWidth) {
-    canvas.width  = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
-    const ctx = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
-    ctx.clearRect(0,0,W,H);
-    if (latestAmp > 0) {
-      // Gambar tren amplitude dari ThingSpeak (bukan animasi palsu)
-      ctx.strokeStyle = '#4aeaaa';
-      ctx.lineWidth   = 1.8;
-      ctx.shadowBlur  = 8;
-      ctx.shadowColor = '#4aeaaa';
-      ctx.beginPath();
-      // Visualisasi sinusoidal berdasarkan nilai amplitude real
-      for (let x=0; x<W; x++) {
-        const t = (x + wo) * 0.042;
-        const amp = (latestAmp / 1023) * (H * 0.4);
-        const y = H/2 + amp * (Math.sin(t) + 0.3*Math.sin(t*2.1));
-        x===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
-      }
-      ctx.stroke();
-      wo += 1.5;
-    } else {
-      // Tidak ada data → garis datar di tengah
-      ctx.strokeStyle = 'rgba(74,234,170,.2)';
-      ctx.lineWidth   = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, H/2); ctx.lineTo(W, H/2);
-      ctx.stroke();
-      // Teks tunggu
-      ctx.fillStyle = 'rgba(255,255,255,.2)';
-      ctx.font = '11px Outfit,sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('Menunggu data dari sensor FSR...', W/2, H/2 - 10);
-    }
-  }
-  requestAnimationFrame(waveLoop);
-})();
-
-// ── THINGSPEAK POLLING — hanya amplitude, tidak ada dummy ──
+// ── FIREBASE POLLING ───────────────────────────────────────────
 Firebase.startPolling((data) => {
-  // data.force = nilai force Newton dari sensor FSR Arduino
-  latestAmp = data.force;
+  const force = data.force;
+  pushForcePoint(force);
 
-  // Tampil force
-  setText('lm-a', data.force.toFixed(3));
+  setText('lm-force', force.toFixed(3));
+  setText('lm-status', data.status || '—');
 
-  // Konversi force Newton → grip %
-  // norm.avg = rata-rata kekuatan normal pasien dalam kgf (1 kgf ≈ 9.8 N)
-  const normNewton = norm.avg * 9.8;
-  const gripEst = Math.min(100, Math.round((data.force / normNewton) * 100));
-  setText('g-val', gripEst + '%');
-  updateGauge('g-arc', gripEst);
+  const forceEl = document.getElementById('s-force-big');
+  if (forceEl) {
+    forceEl.textContent = force.toFixed(3);
+    forceEl.style.color = force >= normN * 0.85 ? '#4aeaaa' : force >= normN * 0.65 ? '#e8a838' : '#c84b31';
+  }
+
   const gs = document.getElementById('g-status');
-  if (gripEst >= 85)      { gs.textContent='Normal';          gs.className='g-status badge b-ok'; }
-  else if (gripEst >= 65) { gs.textContent='Hampir Normal';   gs.className='g-status badge b-warn'; }
-  else                    { gs.textContent='Di Bawah Normal'; gs.className='g-status badge b-err'; }
-  setText('nr-you', data.force.toFixed(2) + ' N');
+  if (force >= normN * 0.85)      { gs.textContent='Normal';          gs.className='g-status b-ok'; }
+  else if (force >= normN * 0.65) { gs.textContent='Hampir Normal';   gs.className='g-status b-warn'; }
+  else                            { gs.textContent='Di Bawah Normal'; gs.className='g-status b-err'; }
 
-  // Status dari Arduino: Lemah / Sedang / Kuat
-  setText('fat-n', data.status || '—');
-
-  // Simpan ke buffer jika sedang rekam
-  if (isRec) buf.push({ timestamp: new Date().toISOString(), force: data.force, status: data.status });
-
+  setText('nr-you', force.toFixed(3) + ' N');
+  if (isRec) buf.push({ timestamp: new Date().toISOString(), force, status: data.status });
   setTSStatus(true, 'Firebase — sensor terhubung ✓');
 }, 2000);
 
-// Cek awal
 setTimeout(async () => {
   const check = await Firebase.fetchLatest();
   if (!check) setTSStatus(false, 'Menunggu data sensor...');
 }, 3000);
 
-// CALIBRATION
 function openCal() {
   document.getElementById('cal-m').classList.add('show');
   document.getElementById('cal-close').disabled=true;
   document.getElementById('cal-fill').style.width='0%';
-  const steps=document.querySelectorAll('.cal-step');
+  const steps = document.querySelectorAll('.cal-step');
   steps.forEach(s=>s.className='cal-step');
-  const pcts=[25,50,75,90,100];
-  let i=0;
+  const pcts=[25,50,75,100]; let i=0;
   const t=setInterval(()=>{
     if(i>=steps.length){clearInterval(t);document.getElementById('cal-fill').style.width='100%';document.getElementById('cal-close').disabled=false;showToast('Kalibrasi selesai ✅','success');return;}
     if(i>0)steps[i-1].classList.add('done');
@@ -423,7 +365,7 @@ function openCal() {
     i++;
   },700);
 }
-function closeCal(){document.getElementById('cal-m').classList.remove('show');}
+function closeCal(){ document.getElementById('cal-m').classList.remove('show'); }
 </script>
 </body>
 </html>

@@ -95,22 +95,10 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
           <div class="wday"><div class="wday-n">Sab</div><div class="wday-d wd-fut">·</div></div>
           <div class="wday"><div class="wday-n">Min</div><div class="wday-d wd-fut">·</div></div>
         </div>
-        <div class="prog-list">
+        <div class="prog-list" id="prog-list">
           <div class="prog-item">
-            <div class="prog-h"><span class="prog-n">Kekuatan Grip</span><span class="prog-v">62% → target 80%</span></div>
-            <div class="pbar"><div class="pfill" style="width:62%;background:linear-gradient(to right,#2d6a4f,#e8a838)"></div></div>
-          </div>
-          <div class="prog-item">
-            <div class="prog-h"><span class="prog-n">Stamina Otot</span><span class="prog-v">55% → target 75%</span></div>
-            <div class="pbar"><div class="pfill" style="width:55%;background:linear-gradient(to right,#2d6a4f,#e8a838)"></div></div>
-          </div>
-          <div class="prog-item">
-            <div class="prog-h"><span class="prog-n">Koordinasi Jari</span><span class="prog-v">70% → target 85%</span></div>
-            <div class="pbar"><div class="pfill" style="width:70%;background:linear-gradient(to right,#2d6a4f,#e8a838)"></div></div>
-          </div>
-          <div class="prog-item">
-            <div class="prog-h"><span class="prog-n">Presisi Kontraksi</span><span class="prog-v">48% → target 70%</span></div>
-            <div class="pbar"><div class="pfill" style="width:48%;background:linear-gradient(to right,#2d6a4f,#e8a838)"></div></div>
+            <div class="prog-h"><span class="prog-n">Kekuatan Otot (Force)</span><span class="prog-v" id="prog-force-lbl">— N → target <span id="prog-target">—</span> N</span></div>
+            <div class="pbar"><div class="pfill" id="prog-force-bar" style="width:0%;background:linear-gradient(to right,#2d6a4f,#e8a838)"></div></div>
           </div>
         </div>
       </div>
@@ -124,15 +112,36 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 const user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
 
-const norm = calcNorm(user.gender, user.age, user.weight);
+const norm   = calcNorm(user.gender, user.age, user.weight);
+const normN  = parseFloat((norm.avg * 9.8).toFixed(2));
+const normMinN = parseFloat((norm.min * 9.8).toFixed(2));
+const normMaxN = parseFloat((norm.max * 9.8).toFixed(2));
+
 document.getElementById('pav').textContent = user.name[0].toUpperCase();
 setText('pname', user.name); setText('pemail', user.email);
 setText('d-age',  user.age+' tahun');
 setText('d-gen',  user.gender==='male'?'Laki-laki':'Perempuan');
 setText('d-w',    user.weight+' kg');
 setText('d-h',    user.monitored_hand==='right'?'Tangan Kanan':'Tangan Kiri');
-setText('d-nmin', norm.min+' kgf');
-setText('d-navg', norm.avg+' kgf');
+setText('d-nmin', normMinN.toFixed(2)+' N');
+setText('d-navg', normN.toFixed(2)+' N');
+setText('prog-target', normN.toFixed(2));
+
+// Load force terbaru dari Firebase untuk progress bar
+(async () => {
+  const latest = await Firebase.fetchLatest();
+  if (latest && latest.force > 0) {
+    const force = latest.force;
+    const pct = Math.min(100, Math.round((force / normN) * 100));
+    setText('prog-force-lbl', force.toFixed(3) + ' N → target ' + normN.toFixed(2) + ' N');
+    document.getElementById('prog-target').textContent = normN.toFixed(2);
+    const bar = document.getElementById('prog-force-bar');
+    bar.style.width = pct + '%';
+    bar.style.background = pct >= 85 ? '#2d6a4f' : pct >= 65 ? '#e8a838' : '#c84b31';
+  } else {
+    setText('prog-force-lbl', '— N → target ' + normN.toFixed(2) + ' N');
+  }
+})();
 </script>
 </body>
 </html>

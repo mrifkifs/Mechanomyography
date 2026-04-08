@@ -12,7 +12,6 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .lm-box{background:var(--bg2);border-radius:12px;padding:16px;text-align:center;}
 .lm-v{font-family:'DM Mono',monospace;font-size:28px;font-weight:600;}
 .lm-l{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-top:4px;}
-/* Ganti warna background chart ke putih/terang */
 .chart-wrap{background:#ffffff; border:1px solid var(--border); border-radius:14px;padding:16px;height:220px;position:relative; box-shadow: 0 4px 12px rgba(0,0,0,0.03);}
 .g-status{display:inline-block;padding:8px 24px;border-radius:20px;font-size:14px;font-weight:700;margin-top:8px;}
 .ctrl-row{display:flex;align-items:center;gap:12px;margin-bottom:24px;}
@@ -91,8 +90,8 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
       <div class="card">
         <div class="card-title">Aksi Cepat</div>
         <div style="display:flex;flex-direction:column;gap:8px">
-          <button onclick="doExportSVG()" class="btn btn-o btn-full">📈 Export Grafik (SVG)</button>
-          <button onclick="showToast('Fitur bagikan ke dokter segera hadir.','info')" class="btn btn-o btn-full">👨‍⚕️ Bagikan ke Dokter</button>
+          <button onclick="doExportPDF()" class="btn btn-o btn-full">📄 Export PDF</button>
+          <button onclick="doExportSVG()" class="btn btn-o btn-full">📈 Export SVG</button>
         </div>
       </div>
     </div>
@@ -207,6 +206,32 @@ function doExportSVG() {
         return;
     }
     exportToSVG(buf, `Grafik Kekuatan Otot - Sesi Berjalan`);
+}
+
+// Export data sesi saat ini menjadi PDF
+function doExportPDF() {
+  if (buf.length === 0) {
+      showToast('Belum ada data terekam untuk di-export. Mulai sesi terlebih dahulu.', 'error');
+      return;
+  }
+  const win = window.open('', '_blank');
+  const normNAvg = (norm.avg * 9.8).toFixed(2);
+  const rows = buf.map(e => 
+    `<tr><td>${new Date(e.timestamp).toLocaleTimeString('id-ID')}</td><td>${e.force.toFixed(3)} N</td><td>${e.status}</td></tr>`
+  ).join('');
+  
+  win.document.write(`<html><head><title>Laporan MMG Live</title>
+    <style>body{font-family:Arial;padding:30px;}h1{color:#20b2aa;}table{width:100%;border-collapse:collapse;margin-top:20px;}
+    th,td{border:1px solid #ccc;padding:8px;}th{background:#20b2aa;color:#fff;}</style></head>
+    <body>
+      <h1>Laporan Sesi Berjalan Mechanomyography</h1>
+      <p><b>Pasien:</b> ${user.name||'—'} &nbsp;|&nbsp; <b>Tanggal:</b> ${new Date().toLocaleDateString('id-ID')}</p>
+      <p><b>Rata-rata Normal:</b> ${normNAvg} N</p>
+      <table><tr><th>Waktu</th><th>Force (N)</th><th>Status</th></tr>
+      ${rows}</table>
+    </body></html>`);
+  win.document.close();
+  setTimeout(() => win.print(), 500);
 }
 
 // ── FIREBASE POLLING ───────────────────────────────────────────

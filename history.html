@@ -87,6 +87,7 @@ const user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
 
 let forceChartInstance = null;
+const normNTarget = 600;
 
 async function loadHistory() {
   const events = await Firebase.fetchEvents();
@@ -124,22 +125,67 @@ function renderTable(sessions) {
 function exportPDFHistory() {
   const win = window.open('', '_blank');
   const events = window.__fb_events || [];
-  const norm   = calcNorm(user.gender||'male', user.age||25, user.weight||70);
-  const normNAvg = (norm.avg * 9.8).toFixed(2);
   
-  const rows = events.slice(-50).map(e =>
-    `<tr><td>${new Date(e.timestamp).toLocaleString('id-ID')}</td><td>${e.force.toFixed(3)} N</td><td>${e.status}</td></tr>`
-  ).join('');
+  if(events.length === 0) {
+      showToast('Tidak ada data riwayat untuk diexport.', 'error');
+      return;
+  }
+
+  const totalData = events.length;
+  const sum = events.reduce((acc, curr) => acc + curr.force, 0);
+  const overallAvg = (sum / totalData).toFixed(2);
+  
+  let trendText = "Data tidak cukup untuk melihat tren";
+  if (totalData > 5) {
+      const sliceCount = Math.max(Math.floor(totalData * 0.3), 1);
+      const firstPart = events.slice(0, sliceCount);
+      const lastPart = events.slice(-sliceCount);
+
+      const avgFirst = firstPart.reduce((a, b) => a + b.force, 0) / sliceCount;
+      const avgLast = lastPart.reduce((a, b) => a + b.force, 0) / sliceCount;
+
+      const diff = avgLast - avgFirst;
+      if (diff > 5) {
+          trendText = "🟢 Meningkat (Progres kekuatan otot membaik)";
+      } else if (diff < -5) {
+          trendText = "🔴 Menurun (Mengindikasikan kelelahan / fatigue)";
+      } else {
+          trendText = "🟡 Stabil (Tidak ada perubahan signifikan)";
+      }
+  }
+
+  const rows = events.slice(-100).map(e => {
+    let stat = 'Di Bawah Normal';
+    if (e.force >= normNTarget * 0.85) stat = 'Normal';
+    else if (e.force >= normNTarget * 0.65) stat = 'Hampir Normal';
+
+    return `<tr><td>${new Date(e.timestamp).toLocaleString('id-ID')}</td><td>${e.force.toFixed(3)} N</td><td>${stat}</td></tr>`;
+  }).join('');
   
   win.document.write(`<html><head><title>Laporan Historis MMG</title>
-    <style>body{font-family:Arial;padding:30px;}h1{color:#20b2aa;}table{width:100%;border-collapse:collapse;margin-top:20px;}
-    th,td{border:1px solid #ccc;padding:8px;}th{background:#20b2aa;color:#fff;}</style></head>
+    <style>
+      body{font-family:Arial;padding:30px;}h1{color:#20b2aa;}
+      table{width:100%;border-collapse:collapse;margin-top:20px;font-size:14px;}
+      th,td{border:1px solid #ccc;padding:8px;}th{background:#20b2aa;color:#fff;}
+      .summary-box { background: #f9f9f9; border: 1px solid #ddd; padding: 20px; margin-top: 30px; border-radius: 8px; }
+      .summary-box h3 { margin-top: 0; color: #333; margin-bottom: 12px; }
+      .summary-box p { margin: 6px 0; font-size: 15px; }
+    </style></head>
     <body>
       <h1>Laporan Historis Mechanomyography</h1>
       <p><b>Pasien:</b> ${user.name||'—'} &nbsp;|&nbsp; <b>Tanggal Export:</b> ${new Date().toLocaleDateString('id-ID')}</p>
-      <p><b>Rata-rata Normal:</b> ${normNAvg} N</p>
-      <table><tr><th>Waktu</th><th>Force (N)</th><th>Status</th></tr>
-      ${rows||'<tr><td colspan=3>Belum ada data</td></tr>'}</table>
+      <p><b>Target Normal Alat:</b> ${normNTarget}</p>
+      
+      <table><tr><th>Waktu</th><th>Force</th><th>Status</th></tr>
+      ${rows}</table>
+
+      <div class="summary-box">
+        <h3>📊 Kesimpulan & Analisis</h3>
+        <p><b>Total Data Terekam:</b> ${totalData} titik bacaan</p>
+        <p><b>Rata-rata Kekuatan Keseluruhan:</b> ${overallAvg}</p>
+        <p><b>Tren Kekuatan Otot:</b> ${trendText}</p>
+        <p style="font-size:12px; color:#777; margin-top:10px;">*Tren dihitung dengan membandingkan rata-rata di awal sesi dengan rata-rata di akhir sesi.</p>
+      </div>
     </body></html>`);
   win.document.close();
   setTimeout(() => win.print(), 500);
@@ -163,13 +209,13 @@ function drawChartFromEvents(events) {
   const ctx    = canvas.getContext('2d');
 
   if (!events || events.length < 2) return;
-  window.__fb_events = events; // Simpan untuk export
+  window.__fb_events = events; 
 
   const labels = events.map(e => new Date(e.timestamp).toLocaleString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }));
   const forceVals = events.map(e => parseFloat(e.force.toFixed(3)));
 
   const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-  gradient.addColorStop(0, 'rgba(32, 178, 170, 0.5)'); // Teal terang
+  gradient.addColorStop(0, 'rgba(32, 178, 170, 0.5)'); 
   gradient.addColorStop(1, 'rgba(32, 178, 170, 0)');
 
   forceChartInstance = new Chart(ctx, {

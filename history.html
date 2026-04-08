@@ -113,11 +113,36 @@ function renderTable(sessions) {
       <td><span class="badge b-ok">Selesai</span></td>
       <td>
         <div style="display:flex;gap:6px">
+          <button class="btn btn-o btn-sm" onclick="exportPDFHistory()">PDF</button>
           <button class="btn btn-o btn-sm" onclick="exportToSVG(window.__fb_events, 'Riwayat Keseluruhan Sesi')">SVG</button>
           <button class="btn btn-o btn-sm" onclick="doDelete(${s.id})">Hapus</button>
         </div>
       </td>
     </tr>`).join('') || `<tr><td colspan="4" class="tc muted py-4">Belum ada sesi rekaman.</td></tr>`;
+}
+
+function exportPDFHistory() {
+  const win = window.open('', '_blank');
+  const events = window.__fb_events || [];
+  const norm   = calcNorm(user.gender||'male', user.age||25, user.weight||70);
+  const normNAvg = (norm.avg * 9.8).toFixed(2);
+  
+  const rows = events.slice(-50).map(e =>
+    `<tr><td>${new Date(e.timestamp).toLocaleString('id-ID')}</td><td>${e.force.toFixed(3)} N</td><td>${e.status}</td></tr>`
+  ).join('');
+  
+  win.document.write(`<html><head><title>Laporan Historis MMG</title>
+    <style>body{font-family:Arial;padding:30px;}h1{color:#20b2aa;}table{width:100%;border-collapse:collapse;margin-top:20px;}
+    th,td{border:1px solid #ccc;padding:8px;}th{background:#20b2aa;color:#fff;}</style></head>
+    <body>
+      <h1>Laporan Historis Mechanomyography</h1>
+      <p><b>Pasien:</b> ${user.name||'—'} &nbsp;|&nbsp; <b>Tanggal Export:</b> ${new Date().toLocaleDateString('id-ID')}</p>
+      <p><b>Rata-rata Normal:</b> ${normNAvg} N</p>
+      <table><tr><th>Waktu</th><th>Force (N)</th><th>Status</th></tr>
+      ${rows||'<tr><td colspan=3>Belum ada data</td></tr>'}</table>
+    </body></html>`);
+  win.document.close();
+  setTimeout(() => win.print(), 500);
 }
 
 async function doDelete(id) {

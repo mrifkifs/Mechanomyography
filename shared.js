@@ -157,60 +157,118 @@ function calcNorm(gender, age, weight) {
   };
 }
 
-// SVG Export Generator Detail & Langsung Download
+// SVG Export Generator Detail & Langsung Download (VERSI PRO)
 function exportToSVG(dataArr, titleText) {
     if (!dataArr || dataArr.length === 0) { 
         showToast('Tidak ada data untuk diexport', 'error'); 
         return; 
     }
     
-    const W = 900, H = 500, padX = 70, padY = 60;
+    // Perbesar ukuran canvas agar lebih lega
+    const W = 1000, H = 500, padX = 80, padY = 80;
     const maxVal = Math.max(...dataArr.map(d => d.force), 10);
+    const graphW = W - padX * 2;
+    const graphH = H - padY * 2;
 
     let pathD = "";
+    let areaD = "";
     let points = "";
-    const stepX = (W - padX * 2) / Math.max(dataArr.length - 1, 1);
+    const stepX = graphW / Math.max(dataArr.length - 1, 1);
 
+    // Bikin garis grafik dan area gradasi di bawahnya
     dataArr.forEach((d, i) => {
         const x = padX + i * stepX;
-        const y = H - padY - (d.force / maxVal) * (H - padY * 2);
-        pathD += (i === 0 ? `M ${x} ${y} ` : `L ${x} ${y} `);
-        points += `<circle cx="${x}" cy="${y}" r="4" fill="#20b2aa" stroke="#fff" stroke-width="1.5"/>`;
+        const y = H - padY - (d.force / maxVal) * graphH;
+        
+        if (i === 0) {
+            pathD += `M ${x} ${y} `;
+            areaD += `M ${x} ${H - padY} L ${x} ${y} `;
+        } else {
+            pathD += `L ${x} ${y} `;
+            areaD += `L ${x} ${y} `;
+        }
+        // Titik-titik putih dengan border teal
+        points += `<circle cx="${x}" cy="${y}" r="4" fill="#ffffff" stroke="#20b2aa" stroke-width="2"/>`;
     });
+    
+    // Tutup path area untuk efek shading
+    if (dataArr.length > 0) {
+        const lastX = padX + (dataArr.length - 1) * stepX;
+        areaD += `L ${lastX} ${H - padY} Z`;
+    }
 
-    let gridLines = "";
+    // Y-Axis Grid & Labels (Horizontal)
+    let gridY = "";
     let yLabels = "";
     const ySteps = 5;
     for(let i=0; i<=ySteps; i++) {
-        const y = H - padY - (i/ySteps) * (H - padY * 2);
+        const y = H - padY - (i/ySteps) * graphH;
         const val = (maxVal * (i/ySteps)).toFixed(1);
-        gridLines += `<line x1="${padX}" y1="${y}" x2="${W-padX}" y2="${y}" stroke="#e0e0e0" stroke-dasharray="4 4" stroke-width="1"/>`;
+        gridY += `<line x1="${padX}" y1="${y}" x2="${W-padX}" y2="${y}" stroke="#eaedf0" stroke-width="1.5"/>`;
         yLabels += `<text x="${padX - 15}" y="${y + 4}" text-anchor="end" font-size="12" fill="#666" font-family="sans-serif">${val}</text>`;
     }
 
+    // X-Axis Grid & Labels Waktu (Vertikal)
+    let gridX = "";
+    let xLabels = "";
+    // Menampilkan maksimal 10 label waktu agar tidak menumpuk
+    const xStepCount = Math.min(dataArr.length, 10);
+    for(let i=0; i<xStepCount; i++) {
+        const index = Math.floor(i * (dataArr.length - 1) / Math.max(xStepCount - 1, 1));
+        const d = dataArr[index];
+        if (!d) continue;
+        const x = padX + index * stepX;
+        // Ambil waktu jam:menit:detik
+        const timeStr = new Date(d.timestamp).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+        
+        gridX += `<line x1="${x}" y1="${padY}" x2="${x}" y2="${H-padY}" stroke="#eaedf0" stroke-dasharray="4 4" stroke-width="1.5"/>`;
+        // Label waktu agak dimiringkan (-30 derajat) agar rapi
+        xLabels += `<text x="${x}" y="${H - padY + 25}" text-anchor="middle" font-size="11" fill="#666" font-family="sans-serif" transform="rotate(-30 ${x} ${H - padY + 25})">${timeStr}</text>`;
+    }
+
+    // Hitung rata-rata untuk ditaruh di header
+    const avgForce = (dataArr.reduce((a, b) => a + b.force, 0) / dataArr.length).toFixed(2);
+
+    // Rangkai SVG utuh
     const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="background:#ffffff; font-family:sans-serif;">
+        <defs>
+            <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="rgba(32, 178, 170, 0.4)"/>
+                <stop offset="100%" stop-color="rgba(32, 178, 170, 0.0)"/>
+            </linearGradient>
+        </defs>
         <rect width="100%" height="100%" fill="#ffffff"/>
-        <text x="${W/2}" y="30" text-anchor="middle" font-size="22" font-weight="bold" fill="#333">${titleText}</text>
-        <text x="${W/2}" y="52" text-anchor="middle" font-size="13" fill="#666">Max Force: ${maxVal.toFixed(2)} N | Total Data: ${dataArr.length}</text>
-        ${gridLines}
-        <line x1="${padX}" y1="${H-padY}" x2="${W-padX}" y2="${H-padY}" stroke="#888" stroke-width="2"/>
-        <line x1="${padX}" y1="${padY}" x2="${padX}" y2="${H-padY}" stroke="#888" stroke-width="2"/>
+        
+        <text x="${W/2}" y="35" text-anchor="middle" font-size="24" font-weight="bold" fill="#2c3e50">${titleText}</text>
+        <text x="${W/2}" y="60" text-anchor="middle" font-size="14" fill="#7f8c8d">Rata-rata: ${avgForce} N | Maksimal: ${maxVal.toFixed(2)} N | Total Data: ${dataArr.length}</text>
+
+        ${gridY}
+        ${gridX}
+        
+        <line x1="${padX}" y1="${H-padY}" x2="${W-padX}" y2="${H-padY}" stroke="#bdc3c7" stroke-width="2"/>
+        <line x1="${padX}" y1="${padY}" x2="${padX}" y2="${H-padY}" stroke="#bdc3c7" stroke-width="2"/>
+        
         ${yLabels}
-        <text x="${padX/2 - 10}" y="${H/2}" transform="rotate(-90, ${padX/2 - 10}, ${H/2})" text-anchor="middle" font-size="14" font-weight="bold" fill="#555">Kekuatan (Newton)</text>
-        <text x="${W/2}" y="${H - 20}" text-anchor="middle" font-size="14" font-weight="bold" fill="#555">Titik Perekaman (Waktu)</text>
-        <path d="${pathD}" fill="none" stroke="#20b2aa" stroke-width="3" stroke-linejoin="round"/>
+        ${xLabels}
+        
+        <text x="${padX/2 - 15}" y="${H/2}" transform="rotate(-90, ${padX/2 - 15}, ${H/2})" text-anchor="middle" font-size="14" font-weight="bold" fill="#34495e">Kekuatan (Newton)</text>
+        
+        <path d="${areaD}" fill="url(#areaGrad)"/>
+        <path d="${pathD}" fill="none" stroke="#20b2aa" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
         ${points}
     </svg>`;
 
+    // Trigger Download Otomatis
     const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `Grafik_MMG_${new Date().getTime()}.svg`;
+    a.download = `Grafik_Detail_MMG_${new Date().getTime()}.svg`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    
     showToast('Grafik SVG berhasil diunduh', 'success');
 }
 

@@ -58,14 +58,14 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     
     <div>
       <div class="card">
-        <div class="card-title">Referensi Kekuatan Normal (Mathiowetz et al.)</div>
+        <div class="card-title">Referensi Skala Alat MMG</div>
         <p class="sm muted" style="line-height: 1.6; margin-bottom: 20px;">
-          Berdasarkan profil Anda, berikut adalah rentang nilai normal untuk kekuatan otot genggaman menggunakan konversi Newton (N).
+          Berdasarkan kalibrasi sensor, berikut adalah rentang nilai untuk kekuatan otot genggaman yang terdeteksi oleh alat.
         </p>
         <div>
           <div class="det-row" style="font-size: 16px;"><span class="det-l">Minimum Normal</span><span class="det-v" id="d-nmin" style="color:var(--yellow)">—</span></div>
-          <div class="det-row" style="font-size: 16px;"><span class="det-l">Rata-rata Normal</span><span class="det-v" id="d-navg" style="color:#20b2aa; font-weight:bold;">—</span></div>
-          <div class="det-row" style="font-size: 16px;"><span class="det-l">Maksimal Normal</span><span class="det-v" id="d-nmax" style="color:var(--accent)">—</span></div>
+          <div class="det-row" style="font-size: 16px;"><span class="det-l">Target Normal</span><span class="det-v" id="d-navg" style="color:#20b2aa; font-weight:bold;">—</span></div>
+          <div class="det-row" style="font-size: 16px;"><span class="det-l">Kekuatan Tinggi</span><span class="det-v" id="d-nmax" style="color:var(--accent)">—</span></div>
         </div>
       </div>
     </div>
@@ -117,7 +117,6 @@ const user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
 
 function loadProfileUI() {
-  const norm = calcNorm(user.gender, user.age, user.weight);
   document.getElementById('pav').textContent = user.name[0].toUpperCase();
   setText('pname', user.name); setText('pemail', user.email);
   setText('d-age',  user.age+' tahun');
@@ -125,9 +124,9 @@ function loadProfileUI() {
   setText('d-w',    user.weight+' kg');
   setText('d-h',    user.monitored_hand==='right'?'Kanan':'Kiri');
   
-  setText('d-nmin', (norm.min * 9.8).toFixed(2)+' N');
-  setText('d-navg', (norm.avg * 9.8).toFixed(2)+' N');
-  setText('d-nmax', (norm.max * 9.8).toFixed(2)+' N');
+  setText('d-nmin', '390 (Lemah)');
+  setText('d-navg', '600 (Normal)');
+  setText('d-nmax', '600+ (Kuat)');
 }
 
 function openEdit() {

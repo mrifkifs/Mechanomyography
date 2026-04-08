@@ -1,10 +1,11 @@
 /* ================================================
    Mechanomyography — Shared JS
+   Platform: ThingSpeak IoT / Firebase
    ================================================ */
 
 const FB_URL      = 'https://send-mmg-default-rtdb.asia-southeast1.firebasedatabase.app';
 const FB_REALTIME = `${FB_URL}/fsr/realtime.json`;
-const FB_EVENTS   = `${FB_URL}/fsr/event.json?orderBy="$key"&limitToLast=50`;
+const FB_EVENTS   = `${FB_URL}/fsr/event.json?orderBy="$key"&limitToLast=100`;
 const FB_CONTROL  = `${FB_URL}/fsr/control.json`;
 
 const DB = {
@@ -125,16 +126,10 @@ function setText(id, val) { const e=document.getElementById(id); if(e) e.textCon
 function formatDate(iso) { if(!iso) return '—'; const d=new Date(iso); return `${['Min','Sen','Sel','Rab','Kam','Jum','Sab'][d.getDay()]}, ${d.getDate()} ${['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][d.getMonth()]} ${d.getFullYear()}`; }
 function formatDur(s) { return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
 function getGreeting(name) { const h=new Date().getHours(); return `Selamat ${h<12?'pagi':h<15?'siang':h<18?'sore':'malam'}, ${name.split(' ')[0]} \u{1F44B}`; }
-function calcNorm(gender, age, weight) {
-  const t = { male:[{m:20,b:40},{m:30,b:54},{m:40,b:52},{m:50,b:50},{m:60,b:46},{m:999,b:38}], female:[{m:20,b:24},{m:30,b:32},{m:40,b:31},{m:50,b:29},{m:60,b:26},{m:999,b:22}] };
-  const r = (t[gender]||t.male).find(x=>age<x.m)||t.male[5];
-  const base = r.b*(0.7+0.3*(weight/(gender==='male'?70:60)));
-  return { min:Math.round(base*0.8*10)/10, avg:Math.round(base*10)/10, max:Math.round(base*1.2*10)/10 };
-}
+
 function setTSStatus(connected, msg) { const el=document.getElementById('antares-status'); const lbl=document.getElementById('antares-label'); if(!el||!lbl) return; lbl.textContent=msg||(connected?'Sensor terhubung':'Menunggu data sensor...'); el.classList.toggle('err',!connected); el.classList.add('show'); }
 
-// SVG Export Generator
-// SVG Export Generator yang Jauh Lebih Detail & Langsung Download
+// SVG Export Generator Detail & Langsung Download
 function exportToSVG(dataArr, titleText) {
     if (!dataArr || dataArr.length === 0) { 
         showToast('Tidak ada data untuk diexport', 'error'); 
@@ -143,13 +138,11 @@ function exportToSVG(dataArr, titleText) {
     
     const W = 900, H = 500, padX = 70, padY = 60;
     const maxVal = Math.max(...dataArr.map(d => d.force), 10);
-    const minVal = 0; // Mulai dari 0
 
     let pathD = "";
     let points = "";
     const stepX = (W - padX * 2) / Math.max(dataArr.length - 1, 1);
 
-    // Membuat garis grafik dan titik-titiknya
     dataArr.forEach((d, i) => {
         const x = padX + i * stepX;
         const y = H - padY - (d.force / maxVal) * (H - padY * 2);
@@ -157,7 +150,6 @@ function exportToSVG(dataArr, titleText) {
         points += `<circle cx="${x}" cy="${y}" r="4" fill="#20b2aa" stroke="#fff" stroke-width="1.5"/>`;
     });
 
-    // Membuat Garis Bantu (Grid) dan Label Angka Sumbu Y
     let gridLines = "";
     let yLabels = "";
     const ySteps = 5;
@@ -188,7 +180,6 @@ function exportToSVG(dataArr, titleText) {
         </svg>
     `;
 
-    // Sistem trigger download otomatis
     const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -200,21 +191,6 @@ function exportToSVG(dataArr, titleText) {
     URL.revokeObjectURL(url);
     
     showToast('Grafik SVG berhasil diunduh', 'success');
-}
-
-    const svgStr = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="background:#ffffff; font-family:sans-serif;">
-            <rect width="100%" height="100%" fill="#ffffff"/>
-            <text x="${W/2}" y="30" text-anchor="middle" font-size="20" font-weight="bold" fill="#333">${titleText}</text>
-            <text x="${W/2}" y="50" text-anchor="middle" font-size="14" fill="#666">Max Force: ${maxVal.toFixed(2)} N</text>
-            <line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="#ccc" stroke-width="2"/>
-            <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${H-pad}" stroke="#ccc" stroke-width="2"/>
-            <path d="${pathD}" fill="none" stroke="#20b2aa" stroke-width="3" stroke-linejoin="round"/>
-        </svg>
-    `;
-    const win = window.open('', '_blank');
-    win.document.write(`<html><body style="margin:0;display:flex;justify-content:center;align-items:center;height:100vh;background:#f0f0f0;">${svgStr}</body></html>`);
-    win.document.close();
 }
 
 (function injectCSS() {

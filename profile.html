@@ -36,7 +36,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
   <div class="flex jb items-c mb6">
     <div>
       <h1 class="serif" style="font-size:26px;margin-bottom:4px">Profil Pasien</h1>
-      <p class="sm muted">Data pasien dan referensi nilai normal.</p>
+      <p class="sm muted">Data pasien dan referensi nilai normal (Diupdate 2024).</p>
     </div>
     <button class="btn btn-o" onclick="openEdit()">✏️ Edit Profil</button>
   </div>
@@ -58,14 +58,19 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     
     <div>
       <div class="card">
-        <div class="card-title">Referensi Skala Alat MMG</div>
+        <div class="card-title">Referensi Kekuatan Normal (Internasional 2023-2024)</div>
         <p class="sm muted" style="line-height: 1.6; margin-bottom: 20px;">
-          Berdasarkan kalibrasi sensor, berikut adalah rentang nilai untuk kekuatan otot genggaman yang terdeteksi oleh alat.
+          Nilai di bawah ini dihitung otomatis berdasarkan Usia, Berat Badan, dan Jenis Kelamin Anda menggunakan standar riset kesehatan global terbaru.
+        </p>
+        <p class="xs muted" style="margin-bottom: 16px;">
+          Referensi Data:<br>
+          <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11863340/" target="_blank" style="color:var(--accent);">1. International Norms of Adult Handgrip (2024)</a><br>
+          <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9890066/" target="_blank" style="color:var(--accent);">2. Hand Grip Strength Normalized by Weight (Wang et al., 2023)</a>
         </p>
         <div>
           <div class="det-row" style="font-size: 16px;"><span class="det-l">Minimum Normal</span><span class="det-v" id="d-nmin" style="color:var(--yellow)">—</span></div>
-          <div class="det-row" style="font-size: 16px;"><span class="det-l">Target Normal</span><span class="det-v" id="d-navg" style="color:#20b2aa; font-weight:bold;">—</span></div>
-          <div class="det-row" style="font-size: 16px;"><span class="det-l">Kekuatan Tinggi</span><span class="det-v" id="d-nmax" style="color:var(--accent)">—</span></div>
+          <div class="det-row" style="font-size: 16px;"><span class="det-l">Rata-rata Normal</span><span class="det-v" id="d-navg" style="color:#20b2aa; font-weight:bold;">—</span></div>
+          <div class="det-row" style="font-size: 16px;"><span class="det-l">Maksimal Normal</span><span class="det-v" id="d-nmax" style="color:var(--accent)">—</span></div>
         </div>
       </div>
     </div>
@@ -117,6 +122,7 @@ const user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
 
 function loadProfileUI() {
+  const norm = calcNorm(user.gender, user.age, user.weight);
   document.getElementById('pav').textContent = user.name[0].toUpperCase();
   setText('pname', user.name); setText('pemail', user.email);
   setText('d-age',  user.age+' tahun');
@@ -124,9 +130,9 @@ function loadProfileUI() {
   setText('d-w',    user.weight+' kg');
   setText('d-h',    user.monitored_hand==='right'?'Kanan':'Kiri');
   
-  setText('d-nmin', '390 (Lemah)');
-  setText('d-navg', '600 (Normal)');
-  setText('d-nmax', '600+ (Kuat)');
+  setText('d-nmin', norm.min.toFixed(2)+' N');
+  setText('d-navg', norm.avg.toFixed(2)+' N');
+  setText('d-nmax', norm.max.toFixed(2)+' N');
 }
 
 function openEdit() {

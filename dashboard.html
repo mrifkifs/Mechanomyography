@@ -79,9 +79,13 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
         <div class="p-stat"><div class="p-stat-v" id="ps-h">—</div><div class="p-stat-l">Tangan</div></div>
       </div>
       <div class="norm-box">
-        <div class="norm-box-t">Referensi Kekuatan Normal</div>
-        <div class="norm-v" id="norm-range">—</div>
-        <div class="norm-note" id="norm-note">Memuat...</div>
+        <div class="norm-box-t">Target Rata-rata Normal (Sesuai Profil)</div>
+        <div class="norm-v" id="norm-range">— N</div>
+        <div class="norm-note" id="norm-note">
+          Menggunakan Jurnal Medis Internasional: <br>
+          <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8902402/" target="_blank" style="color:var(--yellow); text-decoration:none;">1. Normative data for handgrip strength (2022)</a><br>
+          <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9890066/" target="_blank" style="color:var(--yellow); text-decoration:none;">2. HGS Normalized by Weight (Wang, 2023)</a>
+        </div>
       </div>
     </div>
 
@@ -104,7 +108,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     <div class="card tc">
       <div class="card-title">Kekuatan Otot Terakhir</div>
       <div class="mini-v" id="d-grip" style="color:var(--yellow)">—</div>
-      <div class="mini-u">Persentase dari normal</div>
+      <div class="mini-u">Persentase dari target normal</div>
       <div class="pbar mb4"><div class="pfill" id="grip-bar" style="width:0;background:var(--yellow)"></div></div>
       <span class="badge b-warn" id="grip-badge">—</span>
     </div>
@@ -127,18 +131,14 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 const user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
 
+const norm = calcNorm(user.gender, user.age, user.weight);
 setText('greeting', getGreeting(user.name));
 setText('pav', user.name[0].toUpperCase());
 setText('pname', user.name); setText('pemail', user.email);
 setText('ps-age', user.age+' th'); setText('ps-w', user.weight+' kg');
 setText('ps-h', user.monitored_hand==='right'?'Kanan':'Kiri');
 
-// Patokan nilai riil alat
-const normNMax = 600; 
-const normNMin = 390; 
-
-setText('norm-range', normNMin + ' – ' + normNMax + ' N');
-setText('norm-note', `Referensi berdasarkan skala kalibrasi alat fisik (Target Normal: ${normNMax}).`);
+setText('norm-range', norm.avg.toFixed(2) + ' N');
 
 function tick() {
   const n=new Date(), h=String(n.getHours()).padStart(2,'0'), m=String(n.getMinutes()).padStart(2,'0');
@@ -167,13 +167,13 @@ function applyMetrics(grip) {
   document.getElementById('grip-bar').style.background = grip>=85?'#2d6a4f':grip>=65?'#e8a838':'#c84b31';
   const gb = document.getElementById('grip-badge');
   if (grip>=85) { gb.textContent='Normal'; gb.className='badge b-ok'; }
-  else if (grip>=65) { gb.textContent='Hampir Normal'; gb.className='badge b-warn'; }
-  else { gb.textContent='Di Bawah Normal'; gb.className='badge b-err'; }
+  else if (grip>=65) { gb.textContent='Sedang'; gb.className='badge b-warn'; }
+  else { gb.textContent='Rendah'; gb.className='badge b-err'; }
 }
 
 function renderAlerts(grip) {
   const items = [];
-  if (grip > 0 && grip < 65) items.push(`<div class="alrt alrt-warn"><span></span><div>Kekuatan otot ${grip}% di bawah nilai normal.</div></div>`);
+  if (grip > 0 && grip < 65) items.push(`<div class="alrt alrt-err"><span></span><div>Kekuatan otot (${grip}%) berada di level Rendah.</div></div>`);
   if (!items.length) items.push(`<div class="alrt alrt-ok"><span></span><div>Semua kondisi otot terpantau baik.</div></div>`);
   document.getElementById('alert-list').innerHTML = items.join('');
 }

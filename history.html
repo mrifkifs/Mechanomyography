@@ -87,7 +87,9 @@ const user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
 
 let forceChartInstance = null;
-const normNTarget = 600;
+const norm = calcNorm(user.gender, user.age, user.weight);
+const normMinN = norm.min;
+const normAvgN = norm.avg;
 
 async function loadHistory() {
   const events = await Firebase.fetchEvents();
@@ -145,19 +147,19 @@ function exportPDFHistory() {
       const avgLast = lastPart.reduce((a, b) => a + b.force, 0) / sliceCount;
 
       const diff = avgLast - avgFirst;
-      if (diff > 5) {
-          trendText = "🟢 Meningkat (Progres kekuatan otot membaik)";
-      } else if (diff < -5) {
-          trendText = "🔴 Menurun (Mengindikasikan kelelahan / fatigue)";
-      } else {
-          trendText = "🟡 Stabil (Tidak ada perubahan signifikan)";
-      }
+      if (diff > 5) trendText = "🟢 Meningkat (Progres kekuatan otot membaik)";
+      else if (diff < -5) trendText = "🔴 Menurun (Mengindikasikan kelelahan / fatigue)";
+      else trendText = "🟡 Stabil (Tidak ada perubahan signifikan)";
   }
 
+  let qualityText = "Kurang Baik (Di bawah batas minimal)";
+  if (overallAvg >= normAvgN) qualityText = "Sangat Baik (Mencapai rata-rata normal)";
+  else if (overallAvg >= normMinN) qualityText = "Baik (Berada di atas batas minimal)";
+
   const rows = events.slice(-100).map(e => {
-    let stat = 'Di Bawah Normal';
-    if (e.force >= normNTarget * 0.85) stat = 'Normal';
-    else if (e.force >= normNTarget * 0.65) stat = 'Hampir Normal';
+    let stat = 'Rendah';
+    if (e.force >= normAvgN) stat = 'Normal';
+    else if (e.force >= normMinN) stat = 'Sedang';
 
     return `<tr><td>${new Date(e.timestamp).toLocaleString('id-ID')}</td><td>${e.force.toFixed(3)} N</td><td>${stat}</td></tr>`;
   }).join('');
@@ -174,17 +176,17 @@ function exportPDFHistory() {
     <body>
       <h1>Laporan Historis Mechanomyography</h1>
       <p><b>Pasien:</b> ${user.name||'—'} &nbsp;|&nbsp; <b>Tanggal Export:</b> ${new Date().toLocaleDateString('id-ID')}</p>
-      <p><b>Target Normal Alat:</b> ${normNTarget}</p>
+      <p><b>Target Rata-rata Normal:</b> ${normAvgN.toFixed(2)} N</p>
       
       <table><tr><th>Waktu</th><th>Force</th><th>Status</th></tr>
       ${rows}</table>
 
       <div class="summary-box">
-        <h3>📊 Kesimpulan & Analisis</h3>
+        <h3>📊 Kesimpulan & Analisis Historis</h3>
         <p><b>Total Data Terekam:</b> ${totalData} titik bacaan</p>
-        <p><b>Rata-rata Kekuatan Keseluruhan:</b> ${overallAvg}</p>
-        <p><b>Tren Kekuatan Otot:</b> ${trendText}</p>
-        <p style="font-size:12px; color:#777; margin-top:10px;">*Tren dihitung dengan membandingkan rata-rata di awal sesi dengan rata-rata di akhir sesi.</p>
+        <p><b>Rata-rata Kekuatan Keseluruhan:</b> ${overallAvg} N</p>
+        <p><b>Kondisi Keseluruhan:</b> ${qualityText}</p>
+        <p><b>Tren / Progres Rehabilitasi:</b> ${trendText}</p>
       </div>
     </body></html>`);
   win.document.close();

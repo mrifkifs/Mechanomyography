@@ -79,10 +79,10 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
         <div class="xs muted" style="margin-bottom:14px;letter-spacing:.1em">NEWTON</div>
         <div class="g-status b-warn" id="g-status">—</div>
         <div style="background:var(--bg2);border-radius:10px;padding:14px;width:100%;margin-top:18px">
-          <div class="card-title" style="margin-bottom:10px">Referensi Normal Alat</div>
+          <div class="card-title" style="margin-bottom:10px">Referensi Normal Pasien</div>
           <table class="nr-tbl">
             <tr><td class="muted">Minimum Normal</td><td id="nr-min">—</td></tr>
-            <tr><td class="muted">Target Normal</td><td id="nr-avg">—</td></tr>
+            <tr><td class="muted">Rata-rata Normal</td><td id="nr-avg">—</td></tr>
           </table>
         </div>
       </div>
@@ -103,11 +103,12 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 const user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
 
-const normN = 600;       
-const normMinN = 390;    
+const norm = calcNorm(user.gender, user.age, user.weight);   
+const normMinN = norm.min;    
+const normAvgN = norm.avg;
 
 setText('nr-min', normMinN + ' N');
-setText('nr-avg', normN + ' N');
+setText('nr-avg', normAvgN + ' N');
 
 const MAX_POINTS = 40;
 const timeLabels = Array(MAX_POINTS).fill('');
@@ -156,7 +157,7 @@ const liveChart = new Chart(ctxLive, {
       x: { ticks: { display: false }, grid: { color: 'rgba(0,0,0,0.03)', drawBorder: false } },
       y: {
         min: 0,
-        suggestedMax: normN * 1.5,
+        suggestedMax: normAvgN * 1.5,
         ticks: { color: '#888', font: { size: 11, family: 'DM Mono, monospace' }, callback: v => v.toFixed(1) + ' N' },
         grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false }
       }
@@ -214,22 +215,26 @@ function doExportPDF() {
   const sum = buf.reduce((acc, curr) => acc + curr.force, 0);
   const overallAvg = (sum / totalData).toFixed(2);
 
-  let trendText = "Data tidak cukup untuk melihat tren";
+  let trendText = "Data belum cukup untuk melihat tren";
   if (totalData > 5) {
       const sliceCount = Math.max(Math.floor(totalData * 0.3), 1);
       const avgFirst = buf.slice(0, sliceCount).reduce((a, b) => a + b.force, 0) / sliceCount;
       const avgLast = buf.slice(-sliceCount).reduce((a, b) => a + b.force, 0) / sliceCount;
       const diff = avgLast - avgFirst;
       
-      if (diff > 5) trendText = "🟢 Kekuatan meningkat selama sesi ini";
-      else if (diff < -5) trendText = "🔴 Mengalami Fatigue (kelelahan menurun) selama sesi";
-      else trendText = "🟡 Kekuatan stabil";
+      if (diff > 5) trendText = "🟢 Meningkat (Progres kekuatan otot membaik)";
+      else if (diff < -5) trendText = "🔴 Menurun (Mengindikasikan kelelahan / fatigue)";
+      else trendText = "🟡 Stabil (Tidak ada perubahan signifikan)";
   }
 
+  let qualityText = "Kurang Baik (Di bawah batas minimal)";
+  if (overallAvg >= normAvgN) qualityText = "Sangat Baik (Mencapai rata-rata normal)";
+  else if (overallAvg >= normMinN) qualityText = "Baik (Berada di atas batas minimal)";
+
   const rows = buf.map(e => {
-    let stat = 'Di Bawah Normal';
-    if (e.force >= normN * 0.85) stat = 'Normal';
-    else if (e.force >= normN * 0.65) stat = 'Hampir Normal';
+    let stat = 'Rendah';
+    if (e.force >= normAvgN) stat = 'Normal';
+    else if (e.force >= normMinN) stat = 'Sedang';
     return `<tr><td>${new Date(e.timestamp).toLocaleTimeString('id-ID')}</td><td>${e.force.toFixed(3)} N</td><td>${stat}</td></tr>`;
   }).join('');
   
@@ -245,15 +250,16 @@ function doExportPDF() {
     <body>
       <h1>Laporan Sesi Berjalan Mechanomyography</h1>
       <p><b>Pasien:</b> ${user.name||'—'} &nbsp;|&nbsp; <b>Tanggal:</b> ${new Date().toLocaleDateString('id-ID')}</p>
-      <p><b>Target Normal Alat:</b> ${normN}</p>
+      <p><b>Target Rata-rata Normal:</b> ${normAvgN.toFixed(2)} N</p>
       
       <table><tr><th>Waktu</th><th>Force</th><th>Status</th></tr>
       ${rows}</table>
 
       <div class="summary-box">
-        <h3>📊 Analisis Sesi Ini</h3>
-        <p><b>Rata-rata Kekuatan Genggaman:</b> ${overallAvg}</p>
-        <p><b>Kondisi Otot (Trend):</b> ${trendText}</p>
+        <h3>📊 Kesimpulan Sesi Ini</h3>
+        <p><b>Rata-rata Kekuatan Genggaman:</b> ${overallAvg} N</p>
+        <p><b>Kondisi Keseluruhan:</b> ${qualityText}</p>
+        <p><b>Tren / Progres Sesi:</b> ${trendText}</p>
       </div>
     </body></html>`);
   win.document.close();
@@ -265,20 +271,24 @@ Firebase.startPolling((data) => {
   pushForcePoint(force);
 
   setText('lm-force', force.toFixed(3));
-  setText('lm-status', data.status || '—');
+  
+  let statNow = 'Rendah';
+  if (force >= normAvgN) statNow = 'Normal';
+  else if (force >= normMinN) statNow = 'Sedang';
+  setText('lm-status', statNow);
 
   const forceEl = document.getElementById('s-force-big');
   if (forceEl) {
     forceEl.textContent = force.toFixed(3);
-    forceEl.style.color = force >= normN * 0.85 ? '#20b2aa' : force >= normN * 0.65 ? '#e8a838' : '#c84b31';
+    forceEl.style.color = force >= normAvgN ? '#20b2aa' : force >= normMinN ? '#e8a838' : '#c84b31';
   }
 
   const gs = document.getElementById('g-status');
-  if (force >= normN * 0.85)      { gs.textContent='Normal';          gs.className='g-status b-ok'; }
-  else if (force >= normN * 0.65) { gs.textContent='Hampir Normal';   gs.className='g-status b-warn'; }
-  else                            { gs.textContent='Di Bawah Normal'; gs.className='g-status b-err'; }
+  if (force >= normAvgN)      { gs.textContent='Normal'; gs.className='g-status b-ok'; }
+  else if (force >= normMinN) { gs.textContent='Sedang'; gs.className='g-status b-warn'; }
+  else                        { gs.textContent='Rendah'; gs.className='g-status b-err'; }
 
-  if (isRec) buf.push({ timestamp: new Date().toISOString(), force, status: data.status });
+  if (isRec) buf.push({ timestamp: new Date().toISOString(), force, status: statNow });
 }, 2000);
 </script>
 </body>

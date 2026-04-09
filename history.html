@@ -5,14 +5,17 @@
 <title>Riwayat — Mechanomyography</title>
 <script src="shared.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <style>
-body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 55% 40% at 75% 10%,rgba(26,71,42,.06) 0,transparent 65%);pointer-events:none;}
-.h-chart{height:300px;position:relative;background:#ffffff;border:1px solid var(--border);border-radius:12px;overflow:hidden;padding:20px;}
-.h-chart canvas{display:block;width:100%!important;height:100%!important;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 55% 40% at 75% 10%,rgba(26,71,42,.05) 0,transparent 65%);pointer-events:none;}
+.h-chart-wrap{background:#fff;border:1.5px solid #e8e3dc;border-radius:16px;padding:24px;box-shadow:0 4px 20px rgba(0,0,0,.05);}
+.h-chart-canvas{position:relative;height:300px;}
+.legend-row{display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;}
+.leg-item{display:flex;align-items:center;gap:7px;font-size:11px;color:#666;}
+.leg-line{width:16px;height:3px;border-radius:2px;display:inline-block;}
 </style>
 </head>
 <body>
-
 <nav class="topbar">
   <a class="logo" href="dashboard.html">Mechanomyography</a>
   <div class="topbar-nav">
@@ -32,10 +35,12 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
   <div class="flex jb items-c mb6">
     <div>
       <h1 class="serif" style="font-size:26px;margin-bottom:4px">Riwayat Rehabilitasi</h1>
-      <p class="sm muted">Progres kekuatan otot tangan dari waktu ke waktu.</p>
+      <p class="sm muted">Progres kekuatan otot tangan dari waktu ke waktu — data Firebase.</p>
     </div>
+    <button class="btn btn-o" onclick="exportPDFHistory()">📄 Export Laporan PDF</button>
   </div>
 
+  <!-- Summary -->
   <div class="g3 mb6">
     <div class="card tc">
       <div class="card-title">Total Sesi</div>
@@ -44,32 +49,46 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     </div>
     <div class="card tc">
       <div class="card-title">Force Terbaik</div>
-      <div class="serif" style="font-size:44px;color:#20b2aa" id="s-best">—</div>
+      <div class="serif" style="font-size:44px;color:#16a34a" id="s-best">—</div>
       <div class="sm muted">Newton</div>
     </div>
     <div class="card tc">
       <div class="card-title">Rata-rata Force</div>
-      <div class="serif" style="font-size:44px;color:var(--yellow)" id="s-avg">—</div>
+      <div class="serif" style="font-size:44px;color:#0891b2" id="s-avg">—</div>
       <div class="sm muted">Newton</div>
     </div>
   </div>
 
-  <div class="card mb6" style="background:var(--bg);">
-    <div class="flex jb items-c" style="margin-bottom:16px">
-      <div class="card-title" style="margin:0">Tren Kekuatan Otot (Newton)</div>
+  <!-- Chart -->
+  <div class="card mb6" style="padding:28px;">
+    <div class="flex jb items-c" style="margin-bottom:20px">
+      <div>
+        <div class="card-title" style="margin:0 0 2px">Tren Kekuatan Otot — Data Sensor FSR Firebase</div>
+        <div style="font-size:11px;color:var(--muted)">Menampilkan 100 data kontraksi terakhir</div>
+      </div>
+      <button class="btn btn-o btn-sm" onclick="exportToSVG(window.__fb_events||[], 'Tren Kekuatan Otot — ' + (Auth.user()?.name||''))">📈 SVG</button>
     </div>
-    <div class="h-chart">
-      <canvas id="gripChart"></canvas>
+    <div class="h-chart-wrap">
+      <div class="h-chart-canvas">
+        <canvas id="histChart"></canvas>
+      </div>
+      <div class="legend-row">
+        <div class="leg-item"><span class="leg-line" style="background:#0891b2"></span>Force Sensor (N)</div>
+        <div class="leg-item"><span class="leg-line" style="background:transparent;border-top:2px dashed #16a34a;width:20px"></span>Target Normal</div>
+        <div class="leg-item"><span class="leg-line" style="background:transparent;border-top:2px dashed #dc2626;width:20px"></span>Batas Minimal</div>
+      </div>
     </div>
   </div>
 
+  <!-- Tabel sesi -->
   <div class="card">
-    <div class="card-title">Daftar Sesi</div>
+    <div class="card-title">Daftar Sesi Rekaman</div>
     <div style="overflow-x:auto">
       <table class="tbl">
         <thead>
           <tr>
-            <th>ID / Tanggal</th>
+            <th>#</th>
+            <th>Tanggal Mulai</th>
             <th>Durasi</th>
             <th>Status</th>
             <th>Aksi</th>
@@ -77,6 +96,11 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
         </thead>
         <tbody id="sess-body"></tbody>
       </table>
+    </div>
+    <div id="empty-state" style="display:none;text-align:center;padding:40px">
+      <div style="font-size:36px;margin-bottom:12px">📭</div>
+      <div class="sm muted">Belum ada sesi tersimpan.<br>Mulai rekam dari halaman MMG Live.</div>
+      <a href="live.html" class="btn btn-p" style="margin-top:16px;display:inline-flex">▶ Mulai Sesi</a>
     </div>
   </div>
 </div>
@@ -86,157 +110,90 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 const user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
 
-let forceChartInstance = null;
-const norm = calcNorm(user.gender, user.age, user.weight);
+let chartInst = null;
+const norm     = calcNorm(user.gender, user.age, user.weight);
 const normMinN = norm.min;
 const normAvgN = norm.avg;
+const normMaxN = norm.max;
 
 async function loadHistory() {
   const events = await Firebase.fetchEvents();
   let sessions = [];
-  try {
-    const r = await API.getSessions();
-    sessions = r.data || [];
-  } catch {}
+  try { const r = await API.getSessions(); sessions = r.data || []; } catch {}
 
   const forces = events.map(e => e.force).filter(f => f > 0);
-  setText('s-total', sessions.length);
+  setText('s-total', sessions.length || events.length);
   setText('s-best',  forces.length ? Math.max(...forces).toFixed(3) : '—');
   setText('s-avg',   forces.length ? (forces.reduce((a,b)=>a+b,0)/forces.length).toFixed(3) : '—');
 
-  drawChartFromEvents(events);
+  drawChart(events);
   renderTable(sessions);
+
+  if (events.length) setTSStatus(true, 'Firebase — data tersedia ✓');
+  else setTSStatus(false, 'Belum ada data sensor');
 }
 
 function renderTable(sessions) {
-  document.getElementById('sess-body').innerHTML = sessions.map(s=>`
+  if (!sessions.length) { document.getElementById('empty-state').style.display='block'; return; }
+  document.getElementById('sess-body').innerHTML = sessions.map((s,i) => `
     <tr>
+      <td class="muted">${i+1}</td>
       <td>${formatDate(s.started_at)}</td>
       <td>${s.duration_seconds ? formatDur(s.duration_seconds) : '—'}</td>
       <td><span class="badge b-ok">Selesai</span></td>
       <td>
         <div style="display:flex;gap:6px">
           <button class="btn btn-o btn-sm" onclick="exportPDFHistory()">PDF</button>
-          <button class="btn btn-o btn-sm" onclick="exportToSVG(window.__fb_events, 'Riwayat Keseluruhan Sesi')">SVG</button>
-          <button class="btn btn-o btn-sm" onclick="doDelete(${s.id})">Hapus</button>
+          <button class="btn btn-o btn-sm" onclick="exportToSVG(window.__fb_events||[], 'Riwayat — ${s.started_at?.split('T')[0]||''}')">SVG</button>
+          <button class="btn btn-o btn-sm" style="color:var(--red);border-color:var(--red)" onclick="doDelete(${s.id})">Hapus</button>
         </div>
       </td>
-    </tr>`).join('') || `<tr><td colspan="4" class="tc muted py-4">Belum ada sesi rekaman.</td></tr>`;
+    </tr>`).join('');
 }
 
-function exportPDFHistory() {
-  const win = window.open('', '_blank');
-  const events = window.__fb_events || [];
-  
-  if(events.length === 0) {
-      showToast('Tidak ada data riwayat untuk diexport.', 'error');
-      return;
+function drawChart(events) {
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+  const canvas = document.getElementById('histChart');
+  const ctx = canvas.getContext('2d');
+
+  if (!events || events.length < 2) {
+    ctx.save(); ctx.fillStyle='#aaa'; ctx.font='14px Outfit,sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('Belum ada data dari sensor.', canvas.parentElement.offsetWidth/2, 140);
+    ctx.restore(); return;
   }
 
-  const totalData = events.length;
-  const sum = events.reduce((acc, curr) => acc + curr.force, 0);
-  const overallAvg = (sum / totalData).toFixed(2);
-  
-  let trendText = "Data tidak cukup untuk melihat tren";
-  if (totalData > 5) {
-      const sliceCount = Math.max(Math.floor(totalData * 0.3), 1);
-      const firstPart = events.slice(0, sliceCount);
-      const lastPart = events.slice(-sliceCount);
+  window.__fb_events = events;
+  const step = Math.max(1, Math.floor(events.length / 12));
 
-      const avgFirst = firstPart.reduce((a, b) => a + b.force, 0) / sliceCount;
-      const avgLast = lastPart.reduce((a, b) => a + b.force, 0) / sliceCount;
-
-      const diff = avgLast - avgFirst;
-      if (diff > 5) trendText = "🟢 Meningkat (Progres kekuatan otot membaik)";
-      else if (diff < -5) trendText = "🔴 Menurun (Mengindikasikan kelelahan / fatigue)";
-      else trendText = "🟡 Stabil (Tidak ada perubahan signifikan)";
-  }
-
-  let qualityText = "Kurang Baik (Di bawah batas minimal)";
-  if (overallAvg >= normAvgN) qualityText = "Sangat Baik (Mencapai rata-rata normal)";
-  else if (overallAvg >= normMinN) qualityText = "Baik (Berada di atas batas minimal)";
-
-  const rows = events.slice(-100).map(e => {
-    let stat = 'Rendah';
-    if (e.force >= normAvgN) stat = 'Normal';
-    else if (e.force >= normMinN) stat = 'Sedang';
-
-    return `<tr><td>${new Date(e.timestamp).toLocaleString('id-ID')}</td><td>${e.force.toFixed(3)} N</td><td>${stat}</td></tr>`;
-  }).join('');
-  
-  win.document.write(`<html><head><title>Laporan Historis MMG</title>
-    <style>
-      body{font-family:Arial;padding:30px;}h1{color:#20b2aa;}
-      table{width:100%;border-collapse:collapse;margin-top:20px;font-size:14px;}
-      th,td{border:1px solid #ccc;padding:8px;}th{background:#20b2aa;color:#fff;}
-      .summary-box { background: #f9f9f9; border: 1px solid #ddd; padding: 20px; margin-top: 30px; border-radius: 8px; }
-      .summary-box h3 { margin-top: 0; color: #333; margin-bottom: 12px; }
-      .summary-box p { margin: 6px 0; font-size: 15px; }
-    </style></head>
-    <body>
-      <h1>Laporan Historis Mechanomyography</h1>
-      <p><b>Pasien:</b> ${user.name||'—'} &nbsp;|&nbsp; <b>Tanggal Export:</b> ${new Date().toLocaleDateString('id-ID')}</p>
-      <p><b>Target Rata-rata Normal:</b> ${normAvgN.toFixed(2)} N</p>
-      
-      <table><tr><th>Waktu</th><th>Force</th><th>Status</th></tr>
-      ${rows}</table>
-
-      <div class="summary-box">
-        <h3>📊 Kesimpulan & Analisis Historis</h3>
-        <p><b>Total Data Terekam:</b> ${totalData} titik bacaan</p>
-        <p><b>Rata-rata Kekuatan Keseluruhan:</b> ${overallAvg} N</p>
-        <p><b>Kondisi Keseluruhan:</b> ${qualityText}</p>
-        <p><b>Tren / Progres Rehabilitasi:</b> ${trendText}</p>
-      </div>
-    </body></html>`);
-  win.document.close();
-  setTimeout(() => win.print(), 500);
-}
-
-async function doDelete(id) {
-    const pass = prompt("Sesi ini akan dihapus permanen. Masukkan password akun Anda untuk melanjutkan:");
-    if (pass === null) return;
-    if (pass === user.password) {
-        await API.deleteSession(id);
-        showToast('Sesi berhasil dihapus','success');
-        loadHistory();
-    } else {
-        showToast('Password salah! Gagal menghapus','error');
-    }
-}
-
-function drawChartFromEvents(events) {
-  if (forceChartInstance) { forceChartInstance.destroy(); }
-  const canvas = document.getElementById('gripChart');
-  const ctx    = canvas.getContext('2d');
-
-  if (!events || events.length < 2) return;
-  window.__fb_events = events; 
-
-  const labels = events.map(e => new Date(e.timestamp).toLocaleString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }));
+  const labels = events.map((e,i) =>
+    i % step === 0
+      ? new Date(e.timestamp).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})
+      : ''
+  );
   const forceVals = events.map(e => parseFloat(e.force.toFixed(3)));
 
-  const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-  gradient.addColorStop(0, 'rgba(32, 178, 170, 0.5)'); 
-  gradient.addColorStop(1, 'rgba(32, 178, 170, 0)');
+  const grad = ctx.createLinearGradient(0, 0, 0, 280);
+  grad.addColorStop(0, 'rgba(8,145,178,0.18)');
+  grad.addColorStop(1, 'rgba(8,145,178,0.00)');
 
-  forceChartInstance = new Chart(ctx, {
+  chartInst = new Chart(ctx, {
     type: 'line',
     data: {
-      labels: labels,
+      labels,
       datasets: [{
-          label: 'Force (N)',
-          data: forceVals,
-          borderColor: '#20b2aa',
-          borderWidth: 3,
-          pointBackgroundColor: '#fff',
-          pointBorderColor: '#20b2aa',
-          pointBorderWidth: 2,
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          fill: true,
-          backgroundColor: gradient,
-          tension: 0.4,
+        label: 'Force (N)',
+        data: forceVals,
+        borderColor: '#0891b2',
+        borderWidth: 2.5,
+        pointBackgroundColor: '#0891b2',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 1.5,
+        pointRadius: (c) => c.dataIndex % step === 0 ? 4 : 0,
+        pointHoverRadius: 6,
+        fill: true,
+        backgroundColor: grad,
+        tension: 0.4,
       }]
     },
     options: {
@@ -246,27 +203,182 @@ function drawChartFromEvents(events) {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: 'rgba(255,255,255,0.95)',
-          borderColor: '#e0e0e0',
-          borderWidth: 1,
+          backgroundColor: '#fff',
+          borderColor: '#e8e3dc',
+          borderWidth: 1.5,
           titleColor: '#666',
-          bodyColor: '#333',
-          padding: 10
+          bodyColor: '#1c1a17',
+          padding: 12,
+          callbacks: {
+            title: (items) => events[items[0].dataIndex]
+              ? new Date(events[items[0].dataIndex].timestamp).toLocaleString('id-ID')
+              : '',
+            label: (item) => ` Force: ${item.raw} N`,
+            afterBody: (items) => {
+              const v = items[0].raw;
+              if (v >= normAvgN) return ['Status: Normal ✓'];
+              if (v >= normMinN) return ['Status: Sedang ⚠'];
+              return ['Status: Rendah ✗'];
+            }
+          }
+        },
+        annotation: {
+          annotations: {
+            lineAvg: {
+              type:'line', yMin:normAvgN, yMax:normAvgN,
+              borderColor:'rgba(22,163,74,0.65)', borderWidth:1.5, borderDash:[6,4],
+              label:{content:'Target '+normAvgN.toFixed(1)+' N',display:true,position:'end',color:'#16a34a',font:{size:10,weight:'600'},backgroundColor:'rgba(240,253,244,.9)',padding:{x:5,y:2}}
+            },
+            lineMin: {
+              type:'line', yMin:normMinN, yMax:normMinN,
+              borderColor:'rgba(220,38,38,0.55)', borderWidth:1.5, borderDash:[4,4],
+              label:{content:'Min '+normMinN.toFixed(1)+' N',display:true,position:'start',color:'#dc2626',font:{size:10,weight:'600'},backgroundColor:'rgba(254,242,242,.9)',padding:{x:5,y:2}}
+            }
+          }
         }
       },
       scales: {
         x: {
-          ticks: { color: '#888', font: { size: 11, family: 'Outfit, sans-serif' } },
-          grid: { color: 'rgba(0,0,0,0.04)', drawBorder: false }
+          ticks: { color:'#9a9489', font:{size:10}, maxRotation:35, autoSkip:false },
+          grid: { color:'rgba(0,0,0,0.04)', drawBorder:false }
         },
         y: {
           min: 0,
-          ticks: { color: '#888', font: { size: 11, family: 'Outfit, sans-serif' }, callback: v => v.toFixed(1) + ' N' },
-          grid: { color: 'rgba(0,0,0,0.06)', drawBorder: false }
+          ticks: { color:'#9a9489', font:{size:10,family:'DM Mono,monospace'}, callback: v => v.toFixed(1)+' N' },
+          grid: { color:'rgba(0,0,0,0.06)', drawBorder:false }
         }
       }
     }
   });
+}
+
+async function doDelete(id) {
+  const pass = prompt('Masukkan password akun untuk konfirmasi penghapusan:');
+  if (pass === null) return;
+  if (pass === user.password) {
+    await API.deleteSession(id);
+    showToast('Sesi berhasil dihapus','success');
+    loadHistory();
+  } else { showToast('Password salah! Gagal menghapus','error'); }
+}
+
+function exportPDFHistory() {
+  const events = window.__fb_events || [];
+  if (!events.length) { showToast('Belum ada data riwayat.','error'); return; }
+
+  const win = window.open('', '_blank');
+  const total = events.length;
+  const avg   = (events.reduce((a,b)=>a+b.force,0)/total).toFixed(2);
+  const maxF  = Math.max(...events.map(e=>e.force)).toFixed(3);
+  const minF  = Math.min(...events.map(e=>e.force)).toFixed(3);
+
+  let trend = 'Data belum cukup';
+  if (total > 5) {
+    const n = Math.max(Math.floor(total*0.3),1);
+    const dA = events.slice(0,n).reduce((a,b)=>a+b.force,0)/n;
+    const dB = events.slice(-n).reduce((a,b)=>a+b.force,0)/n;
+    const d  = dB - dA;
+    if (d > 3) trend='🟢 Meningkat — kekuatan membaik';
+    else if (d < -3) trend='🔴 Menurun — potensi kelelahan';
+    else trend='🟡 Stabil';
+  }
+
+  let kualitas='🔴 Kurang (di bawah batas minimal)';
+  if (avg >= normAvgN) kualitas='🟢 Sangat Baik';
+  else if (avg >= normMinN) kualitas='🟡 Baik (di atas batas minimal)';
+
+  // Statistik tambahan
+  const nNormal = events.filter(e=>e.force>=normAvgN).length;
+  const nSedang = events.filter(e=>e.force>=normMinN&&e.force<normAvgN).length;
+  const nRendah = events.filter(e=>e.force<normMinN).length;
+
+  const rows = events.slice(-100).map((e,i) => {
+    let s='Rendah',sc='#dc2626';
+    if(e.force>=normAvgN){s='Normal';sc='#16a34a';}
+    else if(e.force>=normMinN){s='Sedang';sc='#e8a838';}
+    return `<tr style="background:${i%2?'#f9fafb':'#fff'}">
+      <td>${i+1}</td>
+      <td>${new Date(e.timestamp).toLocaleString('id-ID')}</td>
+      <td style="font-weight:600">${e.force.toFixed(3)} N</td>
+      <td><span style="color:${sc};font-weight:700">${s}</span></td>
+    </tr>`;
+  }).join('');
+
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Laporan Historis MMG</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;} body{font-family:'Segoe UI',Arial,sans-serif;background:#f4f6f8;color:#333;}
+    .cover{background:linear-gradient(135deg,#0c4a6e,#0891b2);color:#fff;padding:48px 56px 36px;}
+    .cover h1{font-size:28px;font-weight:700;margin-bottom:6px;} .cover p{opacity:.75;font-size:14px;}
+    .cover .logo{font-size:11px;text-transform:uppercase;letter-spacing:.15em;opacity:.6;margin-bottom:12px;}
+    .badge-row{display:flex;gap:12px;margin-top:24px;flex-wrap:wrap;}
+    .badge{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:10px 16px;}
+    .badge .val{font-size:22px;font-weight:700;} .badge .lbl{font-size:11px;opacity:.7;margin-top:2px;}
+    .body{padding:32px 40px;}
+    .section{background:#fff;border-radius:12px;border:1px solid #e8e8e8;box-shadow:0 2px 8px rgba(0,0,0,.04);margin-bottom:24px;overflow:hidden;}
+    .section-head{background:#f0f9ff;border-bottom:1px solid #e0f2fe;padding:14px 20px;font-size:13px;font-weight:700;color:#0891b2;}
+    .section-body{padding:20px;}
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+    .kpi{background:#f8f9fa;border-radius:8px;padding:14px;text-align:center;}
+    .kpi .v{font-size:20px;font-weight:700;margin-bottom:3px;} .kpi .l{font-size:10px;color:#888;}
+    .dist-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;}
+    .dist{border-radius:8px;padding:14px;text-align:center;}
+    .sum-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
+    .sum-item{background:#f8f9fa;border-radius:8px;padding:12px;}
+    .sum-item .sl{font-size:11px;color:#888;margin-bottom:4px;} .sum-item .sv{font-size:14px;font-weight:600;}
+    table{width:100%;border-collapse:collapse;font-size:13px;}
+    th{background:#f0f9ff;color:#0891b2;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:10px 12px;text-align:left;border-bottom:2px solid #e0f2fe;}
+    td{padding:9px 12px;border-bottom:1px solid #f5f5f5;}
+    .footer{text-align:center;font-size:11px;color:#aaa;margin-top:24px;padding-bottom:16px;}
+    @media print{body{background:#fff;}.cover,.section-head{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+  </style></head><body>
+  <div class="cover">
+    <div class="logo">Mechanomyography Monitoring System</div>
+    <h1>Laporan Historis Kekuatan Otot</h1>
+    <p>Pasien: <b>${user.name}</b> &nbsp;|&nbsp; Tanggal Export: ${new Date().toLocaleDateString('id-ID',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
+    <div class="badge-row">
+      <div class="badge"><div class="val">${total}</div><div class="lbl">Total Data</div></div>
+      <div class="badge"><div class="val">${avg} N</div><div class="lbl">Rata-rata Force</div></div>
+      <div class="badge"><div class="val">${maxF} N</div><div class="lbl">Force Tertinggi</div></div>
+      <div class="badge"><div class="val">${normAvgN.toFixed(2)} N</div><div class="lbl">Target Normal</div></div>
+    </div>
+  </div>
+  <div class="body">
+    <div class="section">
+      <div class="section-head">📊 Analisis Statistik</div>
+      <div class="section-body">
+        <div class="kpi-grid">
+          <div class="kpi"><div class="v" style="color:#0891b2">${avg} N</div><div class="l">Rata-rata</div></div>
+          <div class="kpi"><div class="v" style="color:#16a34a">${maxF} N</div><div class="l">Tertinggi</div></div>
+          <div class="kpi"><div class="v" style="color:#dc2626">${minF} N</div><div class="l">Terendah</div></div>
+          <div class="kpi"><div class="v" style="color:#7c3aed">${total}</div><div class="l">Total Bacaan</div></div>
+        </div>
+        <div class="dist-grid">
+          <div class="dist" style="background:#f0fdf4;border:1px solid #bbf7d0"><div style="font-size:22px;font-weight:700;color:#16a34a">${nNormal}</div><div style="font-size:11px;color:#666;margin-top:3px">Status Normal</div><div style="font-size:10px;color:#888">(${((nNormal/total)*100).toFixed(1)}%)</div></div>
+          <div class="dist" style="background:#fffbeb;border:1px solid #fde68a"><div style="font-size:22px;font-weight:700;color:#e8a838">${nSedang}</div><div style="font-size:11px;color:#666;margin-top:3px">Status Sedang</div><div style="font-size:10px;color:#888">(${((nSedang/total)*100).toFixed(1)}%)</div></div>
+          <div class="dist" style="background:#fef2f2;border:1px solid #fecaca"><div style="font-size:22px;font-weight:700;color:#dc2626">${nRendah}</div><div style="font-size:11px;color:#666;margin-top:3px">Status Rendah</div><div style="font-size:10px;color:#888">(${((nRendah/total)*100).toFixed(1)}%)</div></div>
+        </div>
+        <div class="sum-grid">
+          <div class="sum-item"><div class="sl">Kondisi Keseluruhan</div><div class="sv">${kualitas}</div></div>
+          <div class="sum-item"><div class="sl">Tren Rehabilitasi</div><div class="sv">${trend}</div></div>
+          <div class="sum-item"><div class="sl">Batas Minimal Normal</div><div class="sv" style="color:#dc2626">${normMinN.toFixed(2)} N</div></div>
+          <div class="sum-item"><div class="sl">Target Rata-rata Normal</div><div class="sv" style="color:#16a34a">${normAvgN.toFixed(2)} N</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-head">📋 Data Kontraksi (100 Terakhir)</div>
+      <div class="section-body" style="padding:0">
+        <table>
+          <thead><tr><th>#</th><th>Waktu</th><th>Force (N)</th><th>Status</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="footer">Sistem Monitoring Mechanomyography — BRIN KST Samaun Samadikun &nbsp;|&nbsp; Dicetak: ${new Date().toLocaleString('id-ID')}</div>
+  </div>
+  <script>setTimeout(()=>window.print(),600);<\/script>
+  </body></html>`);
+  win.document.close();
 }
 
 loadHistory();

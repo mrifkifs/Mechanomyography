@@ -5,25 +5,42 @@
 <title>MMG Live — Mechanomyography</title>
 <script src="shared.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <style>
-body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 55% 40% at 80% 15%,rgba(26,71,42,.06) 0,transparent 65%);pointer-events:none;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 55% 40% at 80% 15%,rgba(26,71,42,.05) 0,transparent 65%);pointer-events:none;}
 .live-layout{display:grid;grid-template-columns:1fr 300px;gap:20px;}
-.lm-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;}
-.lm-box{background:var(--bg2);border-radius:12px;padding:16px;text-align:center;}
-.lm-v{font-family:'DM Mono',monospace;font-size:28px;font-weight:600;}
+.lm-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;}
+.lm-box{background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:16px 12px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.04);}
+.lm-v{font-family:'DM Mono',monospace;font-size:26px;font-weight:700;}
 .lm-l{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-top:4px;}
-.chart-wrap{background:#ffffff; border:1px solid var(--border); border-radius:14px;padding:16px;height:220px;position:relative; box-shadow: 0 4px 12px rgba(0,0,0,0.03);}
-.g-status{display:inline-block;padding:8px 24px;border-radius:20px;font-size:14px;font-weight:700;margin-top:8px;}
+/* Chart area — putih bersih */
+.chart-outer{background:#fff;border:1.5px solid #e8e3dc;border-radius:16px;padding:20px 20px 14px;box-shadow:0 4px 20px rgba(0,0,0,.05);}
+.chart-title-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.chart-canvas-wrap{position:relative;height:220px;}
+.legend-row{display:flex;gap:20px;flex-wrap:wrap;margin-top:10px;}
+.leg-item{display:flex;align-items:center;gap:6px;font-size:11px;color:#666;}
+.leg-dot{width:10px;height:4px;border-radius:3px;display:inline-block;}
+/* Sidebar */
+.force-big{font-size:56px;font-weight:800;font-family:'DM Mono',monospace;line-height:1;transition:color .3s;}
+.g-status{display:inline-block;padding:8px 24px;border-radius:20px;font-size:13px;font-weight:700;margin-top:8px;}
+.nr-tbl{width:100%;font-size:12px;border-collapse:collapse;}
+.nr-tbl tr{border-bottom:1px solid var(--border);}
+.nr-tbl tr:last-child{border-bottom:none;}
+.nr-tbl td{padding:8px 4px;}
+.nr-tbl td:last-child{text-align:right;font-weight:700;font-family:'DM Mono',monospace;color:var(--accent);}
+/* Ctrl */
 .ctrl-row{display:flex;align-items:center;gap:12px;margin-bottom:24px;}
-.rec-t{font-family:'DM Mono',monospace;font-size:15px;color:var(--muted);}
-.nr-tbl{width:100%;font-size:12px;}
-.nr-tbl td{padding:6px 0;}
-.nr-tbl td:last-child{text-align:right;font-weight:600;font-family:'DM Mono',monospace;}
+.rec-t{font-family:'DM Mono',monospace;font-size:16px;font-weight:600;color:var(--muted);min-width:56px;}
+/* Cal Modal */
+.cal-step{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.cal-step:last-child{border-bottom:none;}
+.cicon{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;background:var(--bg2);}
+.cal-step.done .cicon{background:var(--accent-p);color:var(--accent);}
+.cal-step.active .cicon{background:var(--yellow-p);color:var(--yellow);}
 @media(max-width:900px){.live-layout{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
-
 <nav class="topbar">
   <a class="logo" href="dashboard.html">Mechanomyography</a>
   <div class="topbar-nav">
@@ -43,7 +60,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
   <div class="ctrl-row">
     <div style="flex:1">
       <h1 class="serif" style="font-size:24px;margin-bottom:3px">Monitoring MMG Live</h1>
-      <p class="sm muted">Sensor dipasang di tengah pergelangan tangan.</p>
+      <p class="sm muted">Sensor FSR dipasang di pergelangan tangan — data realtime dari Firebase.</p>
     </div>
     <span class="rec-t" id="rec-t">00:00</span>
     <button class="btn btn-p" id="rec-btn" onclick="toggleRec()">⏺ Mulai / Nyalakan Alat</button>
@@ -51,47 +68,127 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 
   <div class="live-layout">
     <div>
-      <div class="card" style="margin-bottom:20px; background:var(--bg);">
-        <div class="flex jb items-c" style="margin-bottom:14px">
-          <div class="card-title" style="margin:0">Grafik Kekuatan Otot (Newton) — Real-Time</div>
-          <div class="flex items-c gap2 sm" style="color:var(--red)"><div class="ldot"></div> LIVE</div>
+      <!-- GRAFIK REALTIME -->
+      <div class="card" style="margin-bottom:20px;padding:24px;">
+        <div class="chart-title-row">
+          <div>
+            <div class="card-title" style="margin:0 0 2px">Grafik Kekuatan Otot (Newton) — Real-Time</div>
+            <div style="font-size:11px;color:var(--muted)">Diperbarui setiap 2 detik dari sensor FSR</div>
+          </div>
+          <div class="flex items-c gap2 sm" style="color:var(--red);font-weight:600"><div class="ldot"></div> LIVE</div>
         </div>
-        <div class="chart-wrap">
-          <canvas id="liveChart"></canvas>
+        <div class="chart-outer">
+          <div class="chart-canvas-wrap">
+            <canvas id="liveChart"></canvas>
+          </div>
+          <div class="legend-row">
+            <div class="leg-item"><span class="leg-dot" style="background:#0891b2;height:3px"></span>Force Sensor (N)</div>
+            <div class="leg-item"><span class="leg-dot" style="background:#16a34a;border-top:2px dashed #16a34a;background:none;width:16px"></span>Target Normal</div>
+            <div class="leg-item"><span class="leg-dot" style="background:#dc2626;border-top:2px dashed #dc2626;background:none;width:16px"></span>Batas Minimal</div>
+          </div>
         </div>
+
+        <!-- Metric cards -->
         <div class="lm-row">
           <div class="lm-box">
-            <div class="lm-v" id="lm-force" style="color:#20b2aa">—</div>
-            <div class="lm-l">Force (N)</div>
+            <div class="lm-v" id="lm-force" style="color:#0891b2">—</div>
+            <div class="lm-l">Force (Newton)</div>
           </div>
           <div class="lm-box">
-            <div class="lm-v" id="lm-status" style="color:var(--accent)">—</div>
+            <div class="lm-v" id="lm-status" style="color:var(--accent);font-size:20px">—</div>
             <div class="lm-l">Status Otot</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PETA TANGAN -->
+      <div class="card">
+        <div class="card-title">Peta Sensor — Ring MMG Pergelangan Tangan</div>
+        <div style="display:flex;justify-content:center;padding:8px 0 4px">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:14px">
+            <svg width="260" height="460" viewBox="0 0 190 340">
+              <defs>
+                <filter id="sg"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                <filter id="sg2"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                <linearGradient id="sk" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f5e6d3"/><stop offset="100%" stop-color="#e8d5c0"/></linearGradient>
+                <linearGradient id="arm" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e8d5c0"/><stop offset="100%" stop-color="#d4bfa8"/></linearGradient>
+              </defs>
+              <path d="M46 165 C31 160 21 150 24 136 C27 122 38 117 48 128 C54 134 51 148 51 158Z" fill="url(#sk)" stroke="#ccc7be" stroke-width="1.5"/>
+              <rect x="51" y="76" width="22" height="73" rx="10" fill="url(#sk)" stroke="#ccc7be" stroke-width="1.5"/>
+              <line x1="53" y1="115" x2="71" y2="115" stroke="#ccc7be" stroke-width="1"/>
+              <line x1="54" y1="101" x2="70" y2="101" stroke="#ccc7be" stroke-width="1"/>
+              <rect x="75" y="61" width="22" height="88" rx="10" fill="url(#sk)" stroke="#ccc7be" stroke-width="1.5"/>
+              <line x1="77" y1="111" x2="95" y2="111" stroke="#ccc7be" stroke-width="1"/>
+              <line x1="78" y1="97" x2="94" y2="97" stroke="#ccc7be" stroke-width="1"/>
+              <rect x="99" y="71" width="21" height="78" rx="10" fill="url(#sk)" stroke="#ccc7be" stroke-width="1.5"/>
+              <line x1="101" y1="114" x2="118" y2="114" stroke="#ccc7be" stroke-width="1"/>
+              <rect x="122" y="96" width="18" height="56" rx="9" fill="url(#sk)" stroke="#ccc7be" stroke-width="1.5"/>
+              <line x1="124" y1="124" x2="138" y2="124" stroke="#ccc7be" stroke-width="1"/>
+              <rect x="42" y="145" width="108" height="83" rx="14" fill="#f0ebe3" stroke="#d4cfc8" stroke-width="1.5"/>
+              <!-- pulse di telapak -->
+              <circle cx="95" cy="186" r="20" fill="rgba(8,145,178,0.07)">
+                <animate attributeName="r" values="16;28;16" dur="2.2s" repeatCount="indefinite"/>
+                <animate attributeName="opacity" values="0.07;0.18;0.07" dur="2.2s" repeatCount="indefinite"/>
+              </circle>
+              <circle cx="95" cy="186" r="5" fill="rgba(8,145,178,0.35)" filter="url(#sg)">
+                <animate attributeName="opacity" values="0.4;1;0.4" dur="1.4s" repeatCount="indefinite"/>
+              </circle>
+              <rect x="47" y="228" width="96" height="82" rx="6" fill="url(#arm)" stroke="#ccc7be" stroke-width="1"/>
+              <rect x="40" y="254" width="110" height="22" rx="4" fill="#0891b2" stroke="#0e7490" stroke-width="1.5"/>
+              <rect x="40" y="254" width="110" height="8" rx="4" fill="rgba(255,255,255,.2)"/>
+              <!-- sensor nodes -->
+              <g><rect x="43" y="246" width="18" height="16" rx="3" fill="#1e3a5f" stroke="#60a5fa" stroke-width="1.2"/><rect x="46" y="249" width="12" height="8" rx="2" fill="#c8a84b" stroke="#e8c86a" stroke-width=".8"/><circle cx="59" cy="247" r="2.5" fill="#4aeaaa" filter="url(#sg)"><animate attributeName="opacity" values="1;0.15;1" dur="1.7s" repeatCount="indefinite"/></circle><text x="52" y="243" text-anchor="middle" fill="#666" font-size="7" font-family="Outfit,sans-serif">S1</text></g>
+              <g><rect x="65" y="246" width="18" height="16" rx="3" fill="#1e3a5f" stroke="#60a5fa" stroke-width="1.2"/><rect x="68" y="249" width="12" height="8" rx="2" fill="#c8a84b" stroke="#e8c86a" stroke-width=".8"/><circle cx="81" cy="247" r="2.5" fill="#4aeaaa" filter="url(#sg)"><animate attributeName="opacity" values="1;0.15;1" dur="2.1s" repeatCount="indefinite"/></circle><text x="74" y="243" text-anchor="middle" fill="#666" font-size="7" font-family="Outfit,sans-serif">S2</text></g>
+              <g><rect x="82" y="242" width="26" height="22" rx="4" fill="#0c4a6e" stroke="#0891b2" stroke-width="2"/><rect x="85" y="245" width="20" height="11" rx="2" fill="#f0f9ff" stroke="#0891b2" stroke-width=".8"/><polyline points="86,250 88,247 91,251 94,245 97,249 100,247 103,250" fill="none" stroke="#0891b2" stroke-width="1.5"/><circle cx="107" cy="244" r="3" fill="#0891b2" filter="url(#sg2)"><animate attributeName="opacity" values="1;0.1;1" dur="1.2s" repeatCount="indefinite"/></circle><text x="95" y="239" text-anchor="middle" fill="#0891b2" font-size="7.5" font-family="Outfit,sans-serif" font-weight="700">MAIN</text></g>
+              <g><rect x="112" y="246" width="18" height="16" rx="3" fill="#1e3a5f" stroke="#60a5fa" stroke-width="1.2"/><rect x="115" y="249" width="12" height="8" rx="2" fill="#c8a84b" stroke="#e8c86a" stroke-width=".8"/><circle cx="128" cy="247" r="2.5" fill="#4aeaaa" filter="url(#sg)"><animate attributeName="opacity" values="1;0.15;1" dur="1.9s" repeatCount="indefinite"/></circle><text x="121" y="243" text-anchor="middle" fill="#666" font-size="7" font-family="Outfit,sans-serif">S4</text></g>
+              <g><rect x="129" y="246" width="18" height="16" rx="3" fill="#1e3a5f" stroke="#60a5fa" stroke-width="1.2"/><rect x="132" y="249" width="12" height="8" rx="2" fill="#c8a84b" stroke="#e8c86a" stroke-width=".8"/><circle cx="145" cy="247" r="2.5" fill="#4aeaaa" filter="url(#sg)"><animate attributeName="opacity" values="1;0.15;1" dur="2.3s" repeatCount="indefinite"/></circle><text x="138" y="243" text-anchor="middle" fill="#666" font-size="7" font-family="Outfit,sans-serif">S5</text></g>
+              <text x="95" y="290" text-anchor="middle" fill="rgba(255,255,255,.85)" font-size="8" font-family="Outfit,sans-serif" font-weight="600">MMG RING SENSOR</text>
+            </svg>
+            <div style="font-size:11px;color:var(--muted);text-align:center;line-height:2">
+              <span style="display:inline-flex;align-items:center;gap:7px"><span style="width:8px;height:8px;background:#4aeaaa;border-radius:50%;box-shadow:0 0 6px #4aeaaa"></span>Sensor aktif</span>
+              &nbsp;&nbsp;
+              <span style="display:inline-flex;align-items:center;gap:7px"><span style="width:8px;height:8px;background:#0891b2;border-radius:2px"></span>Ring FSR terpasang</span>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
+    <!-- SIDEBAR -->
     <div style="display:flex;flex-direction:column;gap:20px">
+      <!-- Force big -->
       <div class="card" style="text-align:center">
         <div class="card-title">Force Real-Time</div>
-        <div id="s-force-big" style="font-size:52px;font-weight:800;font-family:'DM Mono',monospace;margin:8px 0;line-height:1;color:#20b2aa;transition:color .3s">—</div>
-        <div class="xs muted" style="margin-bottom:14px;letter-spacing:.1em">NEWTON</div>
+        <div id="s-force-big" class="force-big" style="color:#0891b2;margin:10px 0">—</div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.14em;color:var(--muted);margin-bottom:12px">NEWTON</div>
         <div class="g-status b-warn" id="g-status">—</div>
-        <div style="background:var(--bg2);border-radius:10px;padding:14px;width:100%;margin-top:18px">
+
+        <!-- Progress bar visual terhadap target -->
+        <div style="margin-top:16px">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:5px">
+            <span>0 N</span><span id="prog-target-lbl">— N target</span>
+          </div>
+          <div class="pbar" style="height:10px">
+            <div class="pfill" id="prog-bar" style="width:0;background:linear-gradient(to right,#dc2626,#e8a838,#16a34a)"></div>
+          </div>
+        </div>
+
+        <div style="background:var(--bg2);border-radius:10px;padding:14px;width:100%;margin-top:16px">
           <div class="card-title" style="margin-bottom:10px">Referensi Normal Pasien</div>
           <table class="nr-tbl">
-            <tr><td class="muted">Minimum Normal</td><td id="nr-min">—</td></tr>
-            <tr><td class="muted">Rata-rata Normal</td><td id="nr-avg">—</td></tr>
+            <tr><td class="muted">Minimum</td><td id="nr-min">— N</td></tr>
+            <tr><td class="muted">Target Avg</td><td id="nr-avg">— N</td></tr>
+            <tr><td class="muted">Maksimal</td><td id="nr-max">— N</td></tr>
           </table>
         </div>
       </div>
 
+      <!-- Aksi -->
       <div class="card">
         <div class="card-title">Aksi Cepat</div>
         <div style="display:flex;flex-direction:column;gap:8px">
-          <button onclick="doExportPDF()" class="btn btn-o btn-full">📄 Export PDF</button>
-          <button onclick="doExportSVG()" class="btn btn-o btn-full">📈 Export SVG</button>
+          <button onclick="doExportPDF()" class="btn btn-o btn-full">📄 Export Laporan PDF</button>
+          <button onclick="doExportSVG()" class="btn btn-o btn-full">📈 Export Grafik SVG</button>
         </div>
       </div>
     </div>
@@ -103,63 +200,102 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 const user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
 
-const norm = calcNorm(user.gender, user.age, user.weight);   
-const normMinN = norm.min;    
+const norm     = calcNorm(user.gender, user.age, user.weight);
+const normMinN = norm.min;
 const normAvgN = norm.avg;
+const normMaxN = norm.max;
 
-setText('nr-min', normMinN + ' N');
-setText('nr-avg', normAvgN + ' N');
+setText('nr-min', normMinN.toFixed(2) + ' N');
+setText('nr-avg', normAvgN.toFixed(2) + ' N');
+setText('nr-max', normMaxN.toFixed(2) + ' N');
+setText('prog-target-lbl', normAvgN.toFixed(2) + ' N target');
 
+// ── CHART REALTIME ─────────────────────────────────────────────
 const MAX_POINTS = 40;
 const timeLabels = Array(MAX_POINTS).fill('');
 const forceData  = Array(MAX_POINTS).fill(null);
 
 const ctxLive = document.getElementById('liveChart').getContext('2d');
 const liveGrad = ctxLive.createLinearGradient(0, 0, 0, 220);
-liveGrad.addColorStop(0, 'rgba(32, 178, 170, 0.4)'); 
-liveGrad.addColorStop(1, 'rgba(32, 178, 170, 0)');
+liveGrad.addColorStop(0, 'rgba(8,145,178,0.20)');
+liveGrad.addColorStop(1, 'rgba(8,145,178,0.00)');
 
 const liveChart = new Chart(ctxLive, {
   type: 'line',
   data: {
     labels: timeLabels,
-    datasets: [{
+    datasets: [
+      {
         label: 'Force (N)',
         data: forceData,
-        borderColor: '#20b2aa', 
-        borderWidth: 3,
-        pointRadius: 0,
+        borderColor: '#0891b2',
+        borderWidth: 2.5,
+        pointRadius: 3,
+        pointBackgroundColor: '#0891b2',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 1.5,
         pointHoverRadius: 6,
-        pointHoverBackgroundColor: '#20b2aa',
         fill: true,
         backgroundColor: liveGrad,
         tension: 0.4,
-    }]
+      }
+    ]
   },
   options: {
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 150 },
+    animation: { duration: 200 },
     interaction: { mode: 'index', intersect: false },
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: 'rgba(255,255,255,0.95)',
-        borderColor: '#e0e0e0',
-        borderWidth: 1,
-        titleColor: '#666',
-        bodyColor: '#333',
-        padding: 10,
-        callbacks: { title: () => '', label: (item) => ` Kekuatan: ${item.raw !== null ? item.raw.toFixed(3) + ' N' : '—'}` }
+        backgroundColor: '#fff',
+        borderColor: '#e8e3dc',
+        borderWidth: 1.5,
+        titleColor: '#9a9489',
+        bodyColor: '#1c1a17',
+        padding: 12,
+        boxShadow: '0 4px 12px rgba(0,0,0,.1)',
+        callbacks: {
+          title: (items) => {
+            const idx = items[0].dataIndex;
+            return timeLabels[idx] ? `Waktu: ${timeLabels[idx]}` : '';
+          },
+          label: (item) => ` Force: ${item.raw !== null ? item.raw.toFixed(3) + ' N' : '—'}`,
+          afterBody: (items) => {
+            const v = items[0].raw;
+            if (v === null) return [];
+            if (v >= normAvgN)  return ['Status: Normal ✓'];
+            if (v >= normMinN)  return ['Status: Sedang ⚠'];
+            return ['Status: Rendah ✗'];
+          }
+        }
+      },
+      annotation: {
+        annotations: {
+          lineAvg: {
+            type: 'line', yMin: normAvgN, yMax: normAvgN,
+            borderColor: 'rgba(22,163,74,0.7)', borderWidth: 1.5, borderDash: [6,4],
+            label: { content: 'Target ' + normAvgN.toFixed(1) + ' N', display: true, position: 'end', color: '#16a34a', font: { size: 10, weight: '600' }, backgroundColor: 'rgba(240,253,244,0.9)', padding: { x: 5, y: 2 } }
+          },
+          lineMin: {
+            type: 'line', yMin: normMinN, yMax: normMinN,
+            borderColor: 'rgba(220,38,38,0.6)', borderWidth: 1.5, borderDash: [4,4],
+            label: { content: 'Min ' + normMinN.toFixed(1) + ' N', display: true, position: 'start', color: '#dc2626', font: { size: 10, weight: '600' }, backgroundColor: 'rgba(254,242,242,0.9)', padding: { x: 5, y: 2 } }
+          }
+        }
       }
     },
     scales: {
-      x: { ticks: { display: false }, grid: { color: 'rgba(0,0,0,0.03)', drawBorder: false } },
+      x: {
+        ticks: { maxTicksLimit: 8, color: '#9a9489', font: { size: 10 }, maxRotation: 0 },
+        grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false }
+      },
       y: {
         min: 0,
-        suggestedMax: normAvgN * 1.5,
-        ticks: { color: '#888', font: { size: 11, family: 'DM Mono, monospace' }, callback: v => v.toFixed(1) + ' N' },
-        grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false }
+        suggestedMax: normAvgN * 1.6,
+        ticks: { color: '#9a9489', font: { size: 10, family: 'DM Mono, monospace' }, callback: v => v.toFixed(1) + ' N' },
+        grid: { color: 'rgba(0,0,0,0.06)', drawBorder: false }
       }
     }
   }
@@ -167,129 +303,172 @@ const liveChart = new Chart(ctxLive, {
 
 function pushForcePoint(force) {
   const now = new Date();
-  timeLabels.push(`${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`);
-  forceData.push(parseFloat(force.toFixed(3)));
+  const lbl = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  timeLabels.push(lbl); forceData.push(parseFloat(force.toFixed(3)));
   if (timeLabels.length > MAX_POINTS) { timeLabels.shift(); forceData.shift(); }
   liveChart.update('none');
 }
 
+// ── RECORDING ──────────────────────────────────────────────────
 let sessionId=null, isRec=false, recSec=0, recTmr, buf=[];
 async function toggleRec() {
   const btn = document.getElementById('rec-btn');
   if (!isRec) {
     try {
-      await Firebase.setDevicePower(true); 
+      await Firebase.setDevicePower(true);
       try { const r=await API.startSession(); sessionId=r.session.id; } catch {}
       isRec=true; recSec=0; buf=[];
       btn.textContent='⏹ Stop & Matikan Alat'; btn.style.background='var(--red)';
-      recTmr=setInterval(()=>{ recSec++; setText('rec-t',formatDur(recSec)); if(recSec%5===0&&buf.length){try{API.pushMmgBatch(sessionId,buf);}catch{}}},1000);
-      showToast('Alat dinyalakan & Sesi rekaman dimulai','success');
+      recTmr=setInterval(()=>{ recSec++; setText('rec-t',formatDur(recSec)); if(recSec%5===0&&buf.length){try{API.pushMmgBatch(sessionId,buf);}catch{}} },1000);
+      showToast('Alat dinyalakan & sesi rekaman dimulai','success');
     } catch(e){ showToast('Gagal: '+e.message,'error'); }
   } else {
     clearInterval(recTmr); isRec=false;
     btn.textContent='⏺ Mulai / Nyalakan Alat'; btn.style.background='';
-    await Firebase.setDevicePower(false); 
+    await Firebase.setDevicePower(false);
     if(buf.length){try{await API.pushMmgBatch(sessionId,buf);}catch{}}
     try { if(sessionId) await API.endSession(sessionId,{duration_seconds:recSec}); } catch {}
-    showToast('Alat dimatikan & Sesi selesai','success'); sessionId=null;
+    showToast('Alat dimatikan & sesi selesai tersimpan','success'); sessionId=null;
   }
 }
 
-function doExportSVG() {
-    if (buf.length === 0) {
-        showToast('Belum ada data terekam untuk di-export. Mulai sesi terlebih dahulu.', 'error');
-        return;
-    }
-    exportToSVG(buf, `Grafik Kekuatan Otot - Sesi Berjalan`);
-}
-
-function doExportPDF() {
-  if (buf.length === 0) {
-      showToast('Belum ada data terekam untuk di-export. Mulai sesi terlebih dahulu.', 'error');
-      return;
-  }
-  
-  const win = window.open('', '_blank');
-  
-  const totalData = buf.length;
-  const sum = buf.reduce((acc, curr) => acc + curr.force, 0);
-  const overallAvg = (sum / totalData).toFixed(2);
-
-  let trendText = "Data belum cukup untuk melihat tren";
-  if (totalData > 5) {
-      const sliceCount = Math.max(Math.floor(totalData * 0.3), 1);
-      const avgFirst = buf.slice(0, sliceCount).reduce((a, b) => a + b.force, 0) / sliceCount;
-      const avgLast = buf.slice(-sliceCount).reduce((a, b) => a + b.force, 0) / sliceCount;
-      const diff = avgLast - avgFirst;
-      
-      if (diff > 5) trendText = "🟢 Meningkat (Progres kekuatan otot membaik)";
-      else if (diff < -5) trendText = "🔴 Menurun (Mengindikasikan kelelahan / fatigue)";
-      else trendText = "🟡 Stabil (Tidak ada perubahan signifikan)";
-  }
-
-  let qualityText = "Kurang Baik (Di bawah batas minimal)";
-  if (overallAvg >= normAvgN) qualityText = "Sangat Baik (Mencapai rata-rata normal)";
-  else if (overallAvg >= normMinN) qualityText = "Baik (Berada di atas batas minimal)";
-
-  const rows = buf.map(e => {
-    let stat = 'Rendah';
-    if (e.force >= normAvgN) stat = 'Normal';
-    else if (e.force >= normMinN) stat = 'Sedang';
-    return `<tr><td>${new Date(e.timestamp).toLocaleTimeString('id-ID')}</td><td>${e.force.toFixed(3)} N</td><td>${stat}</td></tr>`;
-  }).join('');
-  
-  win.document.write(`<html><head><title>Laporan MMG Live</title>
-    <style>
-      body{font-family:Arial;padding:30px;}h1{color:#20b2aa;}
-      table{width:100%;border-collapse:collapse;margin-top:20px;font-size:14px;}
-      th,td{border:1px solid #ccc;padding:8px;}th{background:#20b2aa;color:#fff;}
-      .summary-box { background: #f9f9f9; border: 1px solid #ddd; padding: 20px; margin-top: 30px; border-radius: 8px; }
-      .summary-box h3 { margin-top: 0; color: #333; margin-bottom: 12px; }
-      .summary-box p { margin: 6px 0; font-size: 15px; }
-    </style></head>
-    <body>
-      <h1>Laporan Sesi Berjalan Mechanomyography</h1>
-      <p><b>Pasien:</b> ${user.name||'—'} &nbsp;|&nbsp; <b>Tanggal:</b> ${new Date().toLocaleDateString('id-ID')}</p>
-      <p><b>Target Rata-rata Normal:</b> ${normAvgN.toFixed(2)} N</p>
-      
-      <table><tr><th>Waktu</th><th>Force</th><th>Status</th></tr>
-      ${rows}</table>
-
-      <div class="summary-box">
-        <h3>📊 Kesimpulan Sesi Ini</h3>
-        <p><b>Rata-rata Kekuatan Genggaman:</b> ${overallAvg} N</p>
-        <p><b>Kondisi Keseluruhan:</b> ${qualityText}</p>
-        <p><b>Tren / Progres Sesi:</b> ${trendText}</p>
-      </div>
-    </body></html>`);
-  win.document.close();
-  setTimeout(() => win.print(), 500);
-}
-
+// ── FIREBASE POLLING ───────────────────────────────────────────
 Firebase.startPolling((data) => {
   const force = data.force;
   pushForcePoint(force);
-
   setText('lm-force', force.toFixed(3));
-  
+
   let statNow = 'Rendah';
   if (force >= normAvgN) statNow = 'Normal';
   else if (force >= normMinN) statNow = 'Sedang';
   setText('lm-status', statNow);
 
-  const forceEl = document.getElementById('s-force-big');
-  if (forceEl) {
-    forceEl.textContent = force.toFixed(3);
-    forceEl.style.color = force >= normAvgN ? '#20b2aa' : force >= normMinN ? '#e8a838' : '#c84b31';
-  }
+  const fEl = document.getElementById('s-force-big');
+  fEl.textContent = force.toFixed(3);
+  fEl.style.color = force >= normAvgN ? '#16a34a' : force >= normMinN ? '#e8a838' : '#dc2626';
 
   const gs = document.getElementById('g-status');
-  if (force >= normAvgN)      { gs.textContent='Normal'; gs.className='g-status b-ok'; }
-  else if (force >= normMinN) { gs.textContent='Sedang'; gs.className='g-status b-warn'; }
-  else                        { gs.textContent='Rendah'; gs.className='g-status b-err'; }
+  if (force >= normAvgN)      { gs.textContent='✓ Normal';  gs.className='g-status b-ok'; }
+  else if (force >= normMinN) { gs.textContent='⚠ Sedang'; gs.className='g-status b-warn'; }
+  else                        { gs.textContent='✗ Rendah'; gs.className='g-status b-err'; }
+
+  const pct = Math.min(100, (force / normMaxN) * 100);
+  document.getElementById('prog-bar').style.width = pct + '%';
 
   if (isRec) buf.push({ timestamp: new Date().toISOString(), force, status: statNow });
+  setTSStatus(true, 'Firebase — sensor aktif ✓');
 }, 2000);
+
+// ── EXPORT PDF ─────────────────────────────────────────────────
+function doExportPDF() {
+  if (!buf.length) { showToast('Belum ada data. Mulai sesi terlebih dahulu.','error'); return; }
+  const win = window.open('', '_blank');
+  const total = buf.length;
+  const avg = (buf.reduce((a,b)=>a+b.force,0)/total).toFixed(2);
+  const maxF = Math.max(...buf.map(b=>b.force)).toFixed(3);
+  const minF = Math.min(...buf.map(b=>b.force)).toFixed(3);
+
+  let trend = 'Data belum cukup';
+  if (total > 5) {
+    const n = Math.max(Math.floor(total*0.3),1);
+    const dA = buf.slice(0,n).reduce((a,b)=>a+b.force,0)/n;
+    const dB = buf.slice(-n).reduce((a,b)=>a+b.force,0)/n;
+    const d = dB - dA;
+    if (d > 3)  trend = '🟢 Meningkat — kekuatan membaik';
+    else if (d < -3) trend = '🔴 Menurun — potensi kelelahan';
+    else trend = '🟡 Stabil';
+  }
+
+  let kualitas = '🔴 Kurang (di bawah batas minimal)';
+  if (avg >= normAvgN)  kualitas = '🟢 Sangat Baik (mencapai target normal)';
+  else if (avg >= normMinN) kualitas = '🟡 Baik (di atas batas minimal)';
+
+  const rows = buf.map((e,i) => {
+    let s='Rendah', sc='#dc2626';
+    if (e.force>=normAvgN){s='Normal';sc='#16a34a';}
+    else if(e.force>=normMinN){s='Sedang';sc='#e8a838';}
+    return `<tr style="background:${i%2?'#f9f9f9':'#fff'}">
+      <td>${i+1}</td>
+      <td>${new Date(e.timestamp).toLocaleTimeString('id-ID')}</td>
+      <td style="font-weight:600">${e.force.toFixed(3)} N</td>
+      <td><span style="color:${sc};font-weight:600">${s}</span></td>
+    </tr>`;
+  }).join('');
+
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Laporan Sesi MMG</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;} body{font-family:'Segoe UI',Arial,sans-serif;background:#f4f6f8;color:#333;}
+    .cover{background:linear-gradient(135deg,#1a472a,#0891b2);color:#fff;padding:48px 56px 36px;position:relative;}
+    .cover h1{font-size:28px;font-weight:700;margin-bottom:6px;} .cover p{opacity:.75;font-size:14px;}
+    .cover .logo{font-size:12px;text-transform:uppercase;letter-spacing:.15em;opacity:.6;margin-bottom:12px;}
+    .badge-row{display:flex;gap:12px;margin-top:24px;flex-wrap:wrap;}
+    .badge{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:10px 16px;}
+    .badge .val{font-size:22px;font-weight:700;} .badge .lbl{font-size:11px;opacity:.7;margin-top:2px;}
+    .body{padding:32px 40px;}
+    .section{background:#fff;border-radius:12px;border:1px solid #e8e8e8;box-shadow:0 2px 8px rgba(0,0,0,.04);margin-bottom:24px;overflow:hidden;}
+    .section-head{background:#f8f9fa;border-bottom:1px solid #e8e8e8;padding:14px 20px;font-size:13px;font-weight:700;color:#555;display:flex;align-items:center;gap:8px;}
+    .section-body{padding:20px;}
+    .kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+    .kpi{background:#f8f9fa;border-radius:8px;padding:14px;text-align:center;}
+    .kpi .v{font-size:22px;font-weight:700;margin-bottom:3px;} .kpi .l{font-size:11px;color:#888;}
+    table{width:100%;border-collapse:collapse;font-size:13px;}
+    th{background:#f0f9ff;color:#0891b2;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:10px 12px;text-align:left;border-bottom:2px solid #e0f2fe;}
+    td{padding:9px 12px;border-bottom:1px solid #f0f0f0;}
+    .sum-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .sum-item{background:#f8f9fa;border-radius:8px;padding:14px;}
+    .sum-item .sl{font-size:11px;color:#888;margin-bottom:5px;} .sum-item .sv{font-size:15px;font-weight:600;}
+    .footer{text-align:center;font-size:11px;color:#aaa;margin-top:24px;padding-bottom:16px;}
+    @media print{body{background:#fff;}.cover{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+  </style></head><body>
+  <div class="cover">
+    <div class="logo">Mechanomyography Monitoring System</div>
+    <h1>Laporan Sesi Rekaman</h1>
+    <p>Pasien: <b>${user.name}</b> &nbsp;|&nbsp; Tanggal: ${new Date().toLocaleDateString('id-ID',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
+    <div class="badge-row">
+      <div class="badge"><div class="val">${total}</div><div class="lbl">Total Data</div></div>
+      <div class="badge"><div class="val">${avg} N</div><div class="lbl">Rata-rata Force</div></div>
+      <div class="badge"><div class="val">${maxF} N</div><div class="lbl">Force Tertinggi</div></div>
+      <div class="badge"><div class="val">${normAvgN.toFixed(2)} N</div><div class="lbl">Target Normal</div></div>
+    </div>
+  </div>
+  <div class="body">
+    <div class="section">
+      <div class="section-head">📊 Ringkasan Sesi</div>
+      <div class="section-body">
+        <div class="kpi-grid">
+          <div class="kpi"><div class="v" style="color:#0891b2">${avg} N</div><div class="l">Rata-rata Force</div></div>
+          <div class="kpi"><div class="v" style="color:#16a34a">${maxF} N</div><div class="l">Force Tertinggi</div></div>
+          <div class="kpi"><div class="v" style="color:#dc2626">${minF} N</div><div class="l">Force Terendah</div></div>
+        </div>
+        <div style="margin-top:16px" class="sum-grid">
+          <div class="sum-item"><div class="sl">Kondisi Keseluruhan</div><div class="sv">${kualitas}</div></div>
+          <div class="sum-item"><div class="sl">Tren Sesi</div><div class="sv">${trend}</div></div>
+          <div class="sum-item"><div class="sl">Batas Minimal Normal</div><div class="sv" style="color:#dc2626">${normMinN.toFixed(2)} N</div></div>
+          <div class="sum-item"><div class="sl">Target Rata-rata Normal</div><div class="sv" style="color:#16a34a">${normAvgN.toFixed(2)} N</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-head">📋 Data Detail Sesi</div>
+      <div class="section-body" style="padding:0">
+        <table>
+          <thead><tr><th>#</th><th>Waktu</th><th>Force (N)</th><th>Status</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="footer">Sistem Monitoring Mechanomyography — BRIN KST Samaun Samadikun &nbsp;|&nbsp; Dicetak: ${new Date().toLocaleString('id-ID')}</div>
+  </div>
+  <script>setTimeout(()=>window.print(),600);<\/script>
+  </body></html>`);
+  win.document.close();
+}
+
+// ── EXPORT SVG ─────────────────────────────────────────────────
+function doExportSVG() {
+  if (!buf.length) { showToast('Belum ada data. Mulai sesi terlebih dahulu.','error'); return; }
+  exportToSVG(buf, `Grafik Kekuatan Otot — ${user.name} — ${new Date().toLocaleDateString('id-ID')}`);
+}
 </script>
 </body>
 </html>

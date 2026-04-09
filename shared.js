@@ -157,119 +157,143 @@ function calcNorm(gender, age, weight) {
   };
 }
 
-// SVG Export Generator Detail & Langsung Download (VERSI PRO)
+// SVG Export — Profesional, detail, dengan grid, legend, statistik, dan warna status
 function exportToSVG(dataArr, titleText) {
-    if (!dataArr || dataArr.length === 0) { 
-        showToast('Tidak ada data untuk diexport', 'error'); 
-        return; 
+    if (!dataArr || dataArr.length === 0) {
+        showToast('Tidak ada data untuk diexport', 'error');
+        return;
     }
-    
-    // Perbesar ukuran canvas agar lebih lega
-    const W = 1000, H = 500, padX = 80, padY = 80;
-    const maxVal = Math.max(...dataArr.map(d => d.force), 10);
-    const graphW = W - padX * 2;
-    const graphH = H - padY * 2;
+    const u = Auth.user() || {};
+    const norm = calcNorm(u.gender||'male', u.age||25, u.weight||70);
+    const normMinN = norm.min, normAvgN = norm.avg, normMaxN = norm.max;
 
-    let pathD = "";
-    let areaD = "";
-    let points = "";
-    const stepX = graphW / Math.max(dataArr.length - 1, 1);
+    const W = 1000, H = 580;
+    const padL = 80, padR = 40, padT = 110, padB = 80;
+    const cW = W - padL - padR, cH = H - padT - padB;
 
-    // Bikin garis grafik dan area gradasi di bawahnya
+    const forces = dataArr.map(d => d.force);
+    const maxVal = Math.max(...forces, normAvgN * 1.2);
+    const avgVal = forces.reduce((a,b)=>a+b,0)/forces.length;
+    const maxF   = Math.max(...forces);
+    const minF   = Math.min(...forces);
+
+    const toX = i => padL + (i / Math.max(dataArr.length - 1, 1)) * cW;
+    const toY = v => padT + cH - (v / maxVal) * cH;
+
+    // Path garis utama
+    let pathD = dataArr.map((d,i) => `${i===0?'M':'L'} ${toX(i).toFixed(1)} ${toY(d.force).toFixed(1)}`).join(' ');
+    // Area fill
+    let areaD = pathD + ` L ${toX(dataArr.length-1).toFixed(1)} ${(padT+cH).toFixed(1)} L ${toX(0).toFixed(1)} ${(padT+cH).toFixed(1)} Z`;
+
+    // Data points warna sesuai status
+    let dots = '';
+    const step = Math.max(1, Math.floor(dataArr.length / 30));
     dataArr.forEach((d, i) => {
-        const x = padX + i * stepX;
-        const y = H - padY - (d.force / maxVal) * graphH;
-        
-        if (i === 0) {
-            pathD += `M ${x} ${y} `;
-            areaD += `M ${x} ${H - padY} L ${x} ${y} `;
-        } else {
-            pathD += `L ${x} ${y} `;
-            areaD += `L ${x} ${y} `;
-        }
-        // Titik-titik putih dengan border teal
-        points += `<circle cx="${x}" cy="${y}" r="4" fill="#ffffff" stroke="#20b2aa" stroke-width="2"/>`;
+        if (i % step !== 0 && i !== dataArr.length - 1) return;
+        const x = toX(i), y = toY(d.force);
+        const col = d.force >= normAvgN ? '#16a34a' : d.force >= normMinN ? '#e8a838' : '#dc2626';
+        dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="${col}" stroke="#fff" stroke-width="1.5" opacity="0.9"/>`;
     });
-    
-    // Tutup path area untuk efek shading
-    if (dataArr.length > 0) {
-        const lastX = padX + (dataArr.length - 1) * stepX;
-        areaD += `L ${lastX} ${H - padY} Z`;
+
+    // Grid lines + labels Y
+    let grid = '', yLbls = '';
+    const ySteps = 6;
+    for (let i=0; i<=ySteps; i++) {
+        const v = (maxVal * i/ySteps);
+        const y = toY(v);
+        grid  += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" stroke="#e8e8e8" stroke-width="${i===0?1.5:1}" stroke-dasharray="${i===0?'none':'5 4'}"/>`;
+        yLbls += `<text x="${padL-10}" y="${(y+4).toFixed(1)}" text-anchor="end" font-size="12" fill="#888" font-family="sans-serif">${v.toFixed(1)} N</text>`;
     }
 
-    // Y-Axis Grid & Labels (Horizontal)
-    let gridY = "";
-    let yLabels = "";
-    const ySteps = 5;
-    for(let i=0; i<=ySteps; i++) {
-        const y = H - padY - (i/ySteps) * graphH;
-        const val = (maxVal * (i/ySteps)).toFixed(1);
-        gridY += `<line x1="${padX}" y1="${y}" x2="${W-padX}" y2="${y}" stroke="#eaedf0" stroke-width="1.5"/>`;
-        yLabels += `<text x="${padX - 15}" y="${y + 4}" text-anchor="end" font-size="12" fill="#666" font-family="sans-serif">${val}</text>`;
-    }
+    // Labels X (sparse)
+    let xLbls = '';
+    const xStep = Math.max(1, Math.floor(dataArr.length / 8));
+    dataArr.forEach((d, i) => {
+        if (i % xStep !== 0 && i !== dataArr.length - 1) return;
+        const x = toX(i);
+        const lbl = new Date(d.timestamp).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+        xLbls += `<text x="${x.toFixed(1)}" y="${(padT+cH+18).toFixed(1)}" text-anchor="middle" font-size="11" fill="#888" font-family="sans-serif">${lbl}</text>`;
+    });
 
-    // X-Axis Grid & Labels Waktu (Vertikal)
-    let gridX = "";
-    let xLabels = "";
-    // Menampilkan maksimal 10 label waktu agar tidak menumpuk
-    const xStepCount = Math.min(dataArr.length, 10);
-    for(let i=0; i<xStepCount; i++) {
-        const index = Math.floor(i * (dataArr.length - 1) / Math.max(xStepCount - 1, 1));
-        const d = dataArr[index];
-        if (!d) continue;
-        const x = padX + index * stepX;
-        // Ambil waktu jam:menit:detik
-        const timeStr = new Date(d.timestamp).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit', second:'2-digit'});
-        
-        gridX += `<line x1="${x}" y1="${padY}" x2="${x}" y2="${H-padY}" stroke="#eaedf0" stroke-dasharray="4 4" stroke-width="1.5"/>`;
-        // Label waktu agak dimiringkan (-30 derajat) agar rapi
-        xLabels += `<text x="${x}" y="${H - padY + 25}" text-anchor="middle" font-size="11" fill="#666" font-family="sans-serif" transform="rotate(-30 ${x} ${H - padY + 25})">${timeStr}</text>`;
-    }
+    // Reference lines
+    const yAvg = toY(normAvgN), yMin = toY(normMinN);
+    const refLines = `
+      <line x1="${padL}" y1="${yAvg.toFixed(1)}" x2="${W-padR}" y2="${yAvg.toFixed(1)}" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="7 4" opacity="0.8"/>
+      <rect x="${W-padR-90}" y="${(yAvg-16).toFixed(1)}" width="88" height="18" rx="4" fill="#f0fdf4" stroke="#bbf7d0"/>
+      <text x="${W-padR-46}" y="${(yAvg-3).toFixed(1)}" text-anchor="middle" font-size="11" fill="#16a34a" font-family="sans-serif" font-weight="bold">Target ${normAvgN.toFixed(1)} N</text>
+      <line x1="${padL}" y1="${yMin.toFixed(1)}" x2="${W-padR}" y2="${yMin.toFixed(1)}" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="5 4" opacity="0.7"/>
+      <rect x="${W-padR-80}" y="${(yMin+2).toFixed(1)}" width="78" height="18" rx="4" fill="#fef2f2" stroke="#fecaca"/>
+      <text x="${W-padR-41}" y="${(yMin+15).toFixed(1)}" text-anchor="middle" font-size="11" fill="#dc2626" font-family="sans-serif" font-weight="bold">Min ${normMinN.toFixed(1)} N</text>
+    `;
 
-    // Hitung rata-rata untuk ditaruh di header
-    const avgForce = (dataArr.reduce((a, b) => a + b.force, 0) / dataArr.length).toFixed(2);
+    // Statistik box kanan atas
+    const kualitas = avgVal >= normAvgN ? 'Sangat Baik' : avgVal >= normMinN ? 'Baik' : 'Perlu Peningkatan';
+    const statBox = `
+      <rect x="${W-padR-220}" y="10" width="218" height="90" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+      <text x="${W-padR-110}" y="28" text-anchor="middle" font-size="11" fill="#888" font-family="sans-serif" font-weight="bold" letter-spacing="0.05em">RINGKASAN STATISTIK</text>
+      <text x="${W-padR-210}" y="46" font-size="12" fill="#333" font-family="sans-serif">Rata-rata: <tspan font-weight="bold" fill="#0891b2">${avgVal.toFixed(3)} N</tspan></text>
+      <text x="${W-padR-210}" y="62" font-size="12" fill="#333" font-family="sans-serif">Tertinggi: <tspan font-weight="bold" fill="#16a34a">${maxF.toFixed(3)} N</tspan>  Terendah: <tspan font-weight="bold" fill="#dc2626">${minF.toFixed(3)} N</tspan></text>
+      <text x="${W-padR-210}" y="78" font-size="12" fill="#333" font-family="sans-serif">Kondisi: <tspan font-weight="bold" fill="#1a472a">${kualitas}</tspan></text>
+      <text x="${W-padR-210}" y="94" font-size="11" fill="#aaa" font-family="sans-serif">Total: ${dataArr.length} data | Target: ${normAvgN.toFixed(2)} N</text>
+    `;
 
-    // Rangkai SVG utuh
-    const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="background:#ffffff; font-family:sans-serif;">
-        <defs>
-            <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="rgba(32, 178, 170, 0.4)"/>
-                <stop offset="100%" stop-color="rgba(32, 178, 170, 0.0)"/>
-            </linearGradient>
-        </defs>
-        <rect width="100%" height="100%" fill="#ffffff"/>
-        
-        <text x="${W/2}" y="35" text-anchor="middle" font-size="24" font-weight="bold" fill="#2c3e50">${titleText}</text>
-        <text x="${W/2}" y="60" text-anchor="middle" font-size="14" fill="#7f8c8d">Rata-rata: ${avgForce} N | Maksimal: ${maxVal.toFixed(2)} N | Total Data: ${dataArr.length}</text>
-
-        ${gridY}
-        ${gridX}
-        
-        <line x1="${padX}" y1="${H-padY}" x2="${W-padX}" y2="${H-padY}" stroke="#bdc3c7" stroke-width="2"/>
-        <line x1="${padX}" y1="${padY}" x2="${padX}" y2="${H-padY}" stroke="#bdc3c7" stroke-width="2"/>
-        
-        ${yLabels}
-        ${xLabels}
-        
-        <text x="${padX/2 - 15}" y="${H/2}" transform="rotate(-90, ${padX/2 - 15}, ${H/2})" text-anchor="middle" font-size="14" font-weight="bold" fill="#34495e">Kekuatan (Newton)</text>
-        
-        <path d="${areaD}" fill="url(#areaGrad)"/>
-        <path d="${pathD}" fill="none" stroke="#20b2aa" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-        ${points}
+    const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="font-family:sans-serif;background:#ffffff;">
+      <defs>
+        <linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#0891b2" stop-opacity="0.15"/>
+          <stop offset="100%" stop-color="#0891b2" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <!-- Background -->
+      <rect width="${W}" height="${H}" fill="#ffffff"/>
+      <rect x="0" y="0" width="${W}" height="8" fill="#0891b2"/>
+      <!-- Title -->
+      <text x="${padL}" y="35" font-size="18" font-weight="bold" fill="#1c1a17" font-family="sans-serif">${titleText}</text>
+      <text x="${padL}" y="55" font-size="12" fill="#888" font-family="sans-serif">Pasien: ${u.name||'—'} | ${new Date().toLocaleDateString('id-ID',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</text>
+      <text x="${padL}" y="72" font-size="11" fill="#aaa" font-family="sans-serif">Sistem Monitoring Mechanomyography — BRIN KST Samaun Samadikun</text>
+      ${statBox}
+      <!-- Grid -->
+      ${grid}
+      <!-- Area -->
+      <path d="${areaD}" fill="url(#ag)"/>
+      <!-- Reference lines -->
+      ${refLines}
+      <!-- Main line -->
+      <path d="${pathD}" fill="none" stroke="#0891b2" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <!-- Data points -->
+      ${dots}
+      <!-- Axes -->
+      <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+cH}" stroke="#ccc" stroke-width="1.5"/>
+      <line x1="${padL}" y1="${padT+cH}" x2="${W-padR}" y2="${padT+cH}" stroke="#ccc" stroke-width="1.5"/>
+      <!-- Y labels -->
+      ${yLbls}
+      <!-- X labels -->
+      ${xLbls}
+      <!-- Axis titles -->
+      <text x="${padL/2 - 5}" y="${padT + cH/2}" transform="rotate(-90 ${padL/2 - 5} ${padT + cH/2})" text-anchor="middle" font-size="13" font-weight="bold" fill="#555" font-family="sans-serif">Kekuatan Otot (Newton)</text>
+      <text x="${padL + cW/2}" y="${H - 10}" text-anchor="middle" font-size="13" font-weight="bold" fill="#555" font-family="sans-serif">Waktu Perekaman</text>
+      <!-- Legend -->
+      <circle cx="${padL}" cy="${H-22}" r="5" fill="#0891b2"/>
+      <text x="${padL+12}" y="${H-18}" font-size="11" fill="#555" font-family="sans-serif">Force Sensor (N)</text>
+      <line x1="${padL+130}" y1="${H-22}" x2="${padL+155}" y2="${H-22}" stroke="#16a34a" stroke-width="2" stroke-dasharray="5 3"/>
+      <text x="${padL+160}" y="${H-18}" font-size="11" fill="#16a34a" font-family="sans-serif">Target Normal</text>
+      <line x1="${padL+260}" y1="${H-22}" x2="${padL+285}" y2="${H-22}" stroke="#dc2626" stroke-width="2" stroke-dasharray="4 3"/>
+      <text x="${padL+290}" y="${H-18}" font-size="11" fill="#dc2626" font-family="sans-serif">Batas Minimal</text>
+      <circle cx="${padL+390}" cy="${H-22}" r="5" fill="#16a34a" stroke="#fff" stroke-width="1.5"/>
+      <text x="${padL+400}" y="${H-18}" font-size="11" fill="#555" font-family="sans-serif">Normal</text>
+      <circle cx="${padL+460}" cy="${H-22}" r="5" fill="#e8a838" stroke="#fff" stroke-width="1.5"/>
+      <text x="${padL+470}" y="${H-18}" font-size="11" fill="#555" font-family="sans-serif">Sedang</text>
+      <circle cx="${padL+520}" cy="${H-22}" r="5" fill="#dc2626" stroke="#fff" stroke-width="1.5"/>
+      <text x="${padL+530}" y="${H-18}" font-size="11" fill="#555" font-family="sans-serif">Rendah</text>
     </svg>`;
 
-    // Trigger Download Otomatis
     const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Grafik_Detail_MMG_${new Date().getTime()}.svg`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    showToast('Grafik SVG berhasil diunduh', 'success');
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = `Grafik_MMG_${new Date().getTime()}.svg`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    showToast('Grafik SVG berhasil diunduh ✓', 'success');
 }
 
 (function injectCSS() {

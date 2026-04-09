@@ -4,19 +4,41 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Profil — Mechanomyography</title>
 <script src="shared.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 55% 40% at 75% 10%,rgba(26,71,42,.06) 0,transparent 65%);pointer-events:none;}
-.prof-layout{display:grid;grid-template-columns:320px 1fr;gap:20px;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 55% 40% at 75% 10%,rgba(26,71,42,.05) 0,transparent 65%);pointer-events:none;}
+.prof-layout{display:grid;grid-template-columns:300px 1fr;gap:20px;}
 .big-av{width:80px;height:80px;background:var(--accent);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:700;margin:0 auto 16px;}
 .det-row{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border);font-size:13px;}
 .det-row:last-child{border-bottom:none;}
 .det-l{color:var(--muted);}
-.det-v{font-weight:500;}
+.det-v{font-weight:600;}
+/* Norm cards */
+.norm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;}
+.norm-card{border-radius:12px;padding:16px;text-align:center;border:1.5px solid;}
+.norm-val{font-size:22px;font-weight:800;font-family:'DM Mono',monospace;margin-bottom:3px;}
+.norm-lbl{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;opacity:.7;}
+/* Force gauge strip */
+.gauge-strip{background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.04);margin-bottom:20px;}
+.gauge-bar-wrap{position:relative;height:20px;border-radius:10px;background:linear-gradient(to right,#fecaca,#fde68a,#bbf7d0);margin:12px 0 8px;overflow:hidden;}
+.gauge-needle{position:absolute;top:0;height:100%;width:3px;background:#1c1a17;border-radius:2px;transition:left .5s;transform:translateX(-50%);}
+.gauge-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);}
+/* Week grid */
+.week-g{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:20px;}
+.wday{text-align:center;}
+.wday-n{font-size:9px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;}
+.wday-d{width:34px;height:34px;margin:0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;}
+.wd-done{background:var(--accent);color:#fff;}
+.wd-today{background:#0891b2;color:#fff;}
+.wd-miss{background:var(--red-p);color:var(--red);}
+.wd-fut{background:var(--bg2);color:var(--muted);}
+/* Chart */
+.prof-chart-wrap{background:#fff;border:1.5px solid #e8e3dc;border-radius:12px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.04);}
+.prof-chart-canvas{position:relative;height:160px;}
 @media(max-width:900px){.prof-layout{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
-
 <nav class="topbar">
   <a class="logo" href="dashboard.html">Mechanomyography</a>
   <div class="topbar-nav">
@@ -36,12 +58,13 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
   <div class="flex jb items-c mb6">
     <div>
       <h1 class="serif" style="font-size:26px;margin-bottom:4px">Profil Pasien</h1>
-      <p class="sm muted">Data pasien dan referensi nilai normal (Diupdate 2024).</p>
+      <p class="sm muted">Data pasien dan referensi nilai normal.</p>
     </div>
     <button class="btn btn-o" onclick="openEdit()">✏️ Edit Profil</button>
   </div>
 
   <div class="prof-layout mb6">
+    <!-- Kolom kiri: info profil -->
     <div>
       <div class="card" style="margin-bottom:16px">
         <div class="big-av" id="pav">?</div>
@@ -54,85 +77,239 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
           <div class="det-row"><span class="det-l">Tangan Monitor</span><span class="det-v" id="d-h">—</span></div>
         </div>
       </div>
-    </div>
-    
-    <div>
+
+      <!-- Referensi Normal -->
       <div class="card">
-        <div class="card-title">Referensi Kekuatan Normal (Internasional 2023-2024)</div>
-        <p class="sm muted" style="line-height: 1.6; margin-bottom: 20px;">
-          Nilai di bawah ini dihitung otomatis berdasarkan Usia, Berat Badan, dan Jenis Kelamin Anda menggunakan standar riset kesehatan global terbaru.
+        <div class="card-title">Referensi Kekuatan Normal</div>
+        <div class="norm-grid">
+          <div class="norm-card" style="background:#fef2f2;border-color:#fecaca">
+            <div class="norm-val" style="color:#dc2626" id="d-nmin">—</div>
+            <div class="norm-lbl" style="color:#dc2626">Minimum</div>
+          </div>
+          <div class="norm-card" style="background:#f0fdf4;border-color:#bbf7d0">
+            <div class="norm-val" style="color:#16a34a" id="d-navg">—</div>
+            <div class="norm-lbl" style="color:#16a34a">Target</div>
+          </div>
+          <div class="norm-card" style="background:#f0f9ff;border-color:#bae6fd">
+            <div class="norm-val" style="color:#0891b2" id="d-nmax">—</div>
+            <div class="norm-lbl" style="color:#0891b2">Maksimal</div>
+          </div>
+        </div>
+        <p class="xs muted" style="line-height:1.7">
+          Dihitung otomatis berdasarkan usia, berat, dan jenis kelamin.<br>
+          <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11863340/" target="_blank" style="color:var(--accent)">Sumber: International Norms of Adult Handgrip (2024)</a>
         </p>
-        <p class="xs muted" style="margin-bottom: 16px;">
-          Referensi Data:<br>
-          <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11863340/" target="_blank" style="color:var(--accent);">1. International Norms of Adult Handgrip (2024)</a><br>
-          <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9890066/" target="_blank" style="color:var(--accent);">2. Hand Grip Strength Normalized by Weight (Wang et al., 2023)</a>
-        </p>
-        <div>
-          <div class="det-row" style="font-size: 16px;"><span class="det-l">Minimum Normal</span><span class="det-v" id="d-nmin" style="color:var(--yellow)">—</span></div>
-          <div class="det-row" style="font-size: 16px;"><span class="det-l">Rata-rata Normal</span><span class="det-v" id="d-navg" style="color:#20b2aa; font-weight:bold;">—</span></div>
-          <div class="det-row" style="font-size: 16px;"><span class="det-l">Maksimal Normal</span><span class="det-v" id="d-nmax" style="color:var(--accent)">—</span></div>
+      </div>
+    </div>
+
+    <!-- Kolom kanan: progress -->
+    <div style="display:flex;flex-direction:column;gap:16px">
+
+      <!-- Gauge force terkini -->
+      <div class="card">
+        <div class="card-title">Kekuatan Otot Saat Ini</div>
+        <div class="gauge-strip">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:32px;font-weight:800;font-family:'DM Mono',monospace;color:#0891b2" id="g-live-val">— N</div>
+              <div style="font-size:11px;color:var(--muted)">dari sensor terkini</div>
+            </div>
+            <div class="g-status badge b-warn" id="g-live-badge" style="font-size:13px;padding:8px 18px">—</div>
+          </div>
+          <div class="gauge-bar-wrap">
+            <div class="gauge-needle" id="gauge-needle" style="left:0%"></div>
+          </div>
+          <div class="gauge-labels">
+            <span id="g-label-min">0 N</span>
+            <span id="g-label-avg" style="color:#16a34a;font-weight:600">Target</span>
+            <span id="g-label-max">— N</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Kehadiran minggu ini -->
+      <div class="card">
+        <div class="card-title">Kehadiran Rehabilitasi Minggu Ini</div>
+        <div class="week-g" id="week-grid"></div>
+      </div>
+
+      <!-- Mini chart tren force dari Firebase -->
+      <div class="card">
+        <div class="card-title">Tren Kekuatan Otot — 50 Data Terakhir</div>
+        <div class="prof-chart-wrap">
+          <div class="prof-chart-canvas">
+            <canvas id="profChart"></canvas>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:10px">
+          <span>Data dari Firebase FSR realtime</span>
+          <span id="prof-data-count">—</span>
         </div>
       </div>
     </div>
   </div>
 </div>
 
+<!-- Edit Modal -->
 <div class="modal-ov" id="edit-m">
   <div class="modal-box">
     <h2 class="serif" style="font-size:22px;margin-bottom:16px">Edit Profil</h2>
-    <div class="fg">
-      <label class="flabel">Nama Lengkap</label>
-      <input class="finput" id="edit-name" type="text">
-    </div>
+    <div class="fg"><label class="flabel">Nama Lengkap</label><input class="finput" id="edit-name" type="text"></div>
     <div class="frow">
-      <div class="fg">
-        <label class="flabel">Umur</label>
-        <input class="finput" id="edit-age" type="number">
-      </div>
-      <div class="fg">
-        <label class="flabel">Berat (kg)</label>
-        <input class="finput" id="edit-weight" type="number">
-      </div>
+      <div class="fg"><label class="flabel">Umur</label><input class="finput" id="edit-age" type="number"></div>
+      <div class="fg"><label class="flabel">Berat (kg)</label><input class="finput" id="edit-weight" type="number"></div>
     </div>
     <div class="fg">
       <label class="flabel">Jenis Kelamin</label>
-      <select class="finput" id="edit-gender">
-        <option value="male">Laki-laki</option>
-        <option value="female">Perempuan</option>
-      </select>
+      <select class="finput" id="edit-gender"><option value="male">Laki-laki</option><option value="female">Perempuan</option></select>
     </div>
     <div class="fg" style="margin-bottom:24px">
       <label class="flabel">Tangan Direhabilitasi</label>
-      <select class="finput" id="edit-hand">
-        <option value="right">Kanan</option>
-        <option value="left">Kiri</option>
-      </select>
+      <select class="finput" id="edit-hand"><option value="right">Kanan</option><option value="left">Kiri</option></select>
     </div>
-    <div style="display:flex;gap:12px;">
+    <div style="display:flex;gap:12px">
       <button class="btn btn-o btn-full" onclick="closeEdit()">Batal</button>
       <button class="btn btn-p btn-full" onclick="saveEdit()">Simpan</button>
     </div>
   </div>
 </div>
-
 <div id="toast"></div>
 
 <script>
-const user = Auth.requireLogin(); if (!user) throw 0;
+let user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
+
+let profChartInst = null;
 
 function loadProfileUI() {
   const norm = calcNorm(user.gender, user.age, user.weight);
   document.getElementById('pav').textContent = user.name[0].toUpperCase();
   setText('pname', user.name); setText('pemail', user.email);
-  setText('d-age',  user.age+' tahun');
-  setText('d-gen',  user.gender==='male'?'Laki-laki':'Perempuan');
-  setText('d-w',    user.weight+' kg');
-  setText('d-h',    user.monitored_hand==='right'?'Kanan':'Kiri');
-  
+  setText('d-age', user.age+' tahun');
+  setText('d-gen', user.gender==='male'?'Laki-laki':'Perempuan');
+  setText('d-w',   user.weight+' kg');
+  setText('d-h',   user.monitored_hand==='right'?'Tangan Kanan':'Tangan Kiri');
   setText('d-nmin', norm.min.toFixed(2)+' N');
   setText('d-navg', norm.avg.toFixed(2)+' N');
   setText('d-nmax', norm.max.toFixed(2)+' N');
+  setText('g-label-min', '0 N');
+  setText('g-label-avg', 'Target '+norm.avg.toFixed(1)+' N');
+  setText('g-label-max', norm.max.toFixed(1)+' N');
+  buildWeekGrid();
+}
+
+function buildWeekGrid() {
+  const days = ['Sen','Sel','Rab','Kam','Jum','Sab','Min'];
+  const today = new Date().getDay(); // 0=Min,1=Sen,...
+  const todayIdx = today === 0 ? 6 : today - 1; // 0=Sen...6=Min
+
+  // Simulasi dari sessions tersimpan
+  const sessions = JSON.parse(localStorage.getItem('myo_sessions')||'[]');
+  const sessionDays = new Set(sessions.map(s => {
+    const d = new Date(s.started_at||s.ended_at);
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  }));
+  const thisWeek = Array.from({length:7},(_,i) => {
+    const d = new Date();
+    const diff = i - todayIdx;
+    const td = new Date(d); td.setDate(d.getDate() + diff);
+    return `${td.getFullYear()}-${td.getMonth()}-${td.getDate()}`;
+  });
+
+  document.getElementById('week-grid').innerHTML = days.map((day, i) => {
+    const isToday = i === todayIdx;
+    const isPast  = i < todayIdx;
+    const hasSess = sessionDays.has(thisWeek[i]);
+    let cls, lbl;
+    if (isToday) { cls='wd-today'; lbl='●'; }
+    else if (isPast && hasSess) { cls='wd-done'; lbl='✓'; }
+    else if (isPast && !hasSess) { cls='wd-miss'; lbl='✗'; }
+    else { cls='wd-fut'; lbl='·'; }
+    return `<div class="wday"><div class="wday-n">${day}</div><div class="wday-d ${cls}">${lbl}</div></div>`;
+  }).join('');
+}
+
+async function loadProfChart() {
+  const events = await Firebase.fetchEvents();
+  const last50 = events.slice(-50);
+  if (!last50.length) { setText('prof-data-count','Belum ada data'); return; }
+  setText('prof-data-count', last50.length + ' data terakhir');
+
+  const norm = calcNorm(user.gender, user.age, user.weight);
+  if (profChartInst) { profChartInst.destroy(); }
+
+  const ctx = document.getElementById('profChart').getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 140);
+  grad.addColorStop(0, 'rgba(8,145,178,0.15)');
+  grad.addColorStop(1, 'rgba(8,145,178,0)');
+
+  const step = Math.max(1, Math.floor(last50.length / 8));
+  const labels = last50.map((e,i) =>
+    i % step === 0
+      ? new Date(e.timestamp).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})
+      : '');
+
+  profChartInst = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: last50.map(e => parseFloat(e.force.toFixed(3))),
+        borderColor: '#0891b2',
+        borderWidth: 2,
+        pointRadius: (c) => c.dataIndex % step === 0 ? 3 : 0,
+        pointBackgroundColor: '#0891b2',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 1,
+        fill: true,
+        backgroundColor: grad,
+        tension: 0.4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor:'#fff', borderColor:'#e8e3dc', borderWidth:1,
+          titleColor:'#666', bodyColor:'#333', padding:10,
+          callbacks: {
+            title: (items) => {
+              const e = last50[items[0].dataIndex];
+              return e ? new Date(e.timestamp).toLocaleString('id-ID') : '';
+            },
+            label: (i) => ` Force: ${i.raw} N`
+          }
+        },
+        annotation: {
+          annotations: {
+            la: {type:'line',yMin:norm.avg,yMax:norm.avg,borderColor:'rgba(22,163,74,0.5)',borderWidth:1.5,borderDash:[5,4]},
+            lb: {type:'line',yMin:norm.min,yMax:norm.min,borderColor:'rgba(220,38,38,0.4)',borderWidth:1,borderDash:[4,4]}
+          }
+        }
+      },
+      scales: {
+        x: { ticks:{color:'#9a9489',font:{size:9},maxRotation:30,autoSkip:false}, grid:{color:'rgba(0,0,0,0.04)',drawBorder:false} },
+        y: { min:0, ticks:{color:'#9a9489',font:{size:9,family:'DM Mono,monospace'},callback:v=>v.toFixed(1)+' N'}, grid:{color:'rgba(0,0,0,0.05)',drawBorder:false} }
+      }
+    }
+  });
+
+  // Update gauge dengan data terakhir
+  const latest = last50[last50.length - 1];
+  if (latest) updateGaugeLive(latest.force, norm);
+}
+
+function updateGaugeLive(force, norm) {
+  setText('g-live-val', force.toFixed(3) + ' N');
+  const pct = Math.min(100, Math.max(0, (force / norm.max) * 100));
+  document.getElementById('gauge-needle').style.left = pct + '%';
+  const badge = document.getElementById('g-live-badge');
+  if (force >= norm.avg) { badge.textContent='✓ Normal'; badge.className='badge b-ok'; }
+  else if (force >= norm.min) { badge.textContent='⚠ Sedang'; badge.className='badge b-warn'; }
+  else { badge.textContent='✗ Rendah'; badge.className='badge b-err'; }
 }
 
 function openEdit() {
@@ -143,9 +320,7 @@ function openEdit() {
   document.getElementById('edit-hand').value = user.monitored_hand;
   document.getElementById('edit-m').classList.add('show');
 }
-
 function closeEdit() { document.getElementById('edit-m').classList.remove('show'); }
-
 async function saveEdit() {
   const updated = {
     name: document.getElementById('edit-name').value,
@@ -155,14 +330,16 @@ async function saveEdit() {
     monitored_hand: document.getElementById('edit-hand').value
   };
   await API.updateProfile(updated);
-  Object.assign(user, updated);
+  user = Auth.user();
   Auth.fillTopbar();
   loadProfileUI();
+  await loadProfChart();
   closeEdit();
-  showToast('Profil berhasil diperbarui!', 'success');
+  showToast('Profil berhasil diperbarui!','success');
 }
 
 loadProfileUI();
+loadProfChart();
 </script>
 </body>
 </html>

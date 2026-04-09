@@ -4,8 +4,10 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Dashboard — Mechanomyography</title>
 <script src="shared.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <style>
-body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 60% 40% at 80% 10%,rgba(26,71,42,.06) 0,transparent 65%),radial-gradient(ellipse 50% 40% at 10% 90%,rgba(200,75,49,.04) 0,transparent 65%);pointer-events:none;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 60% 40% at 80% 10%,rgba(26,71,42,.05) 0,transparent 65%);pointer-events:none;}
 .prof-card{background:var(--accent);border:none;color:#fff;}
 .prof-card .card-title{color:rgba(255,255,255,.5);}
 .prof-main{display:flex;align-items:center;gap:16px;margin-bottom:20px;}
@@ -19,26 +21,30 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .norm-box{background:rgba(255,255,255,.1);border-radius:10px;padding:14px;margin-top:14px;}
 .norm-box-t{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:8px;}
 .norm-v{font-family:'DM Mono',monospace;font-size:26px;font-weight:500;}
-.norm-note{font-size:11px;color:rgba(255,255,255,.55);margin-top:5px;line-height:1.5;}
+.norm-note{font-size:11px;color:rgba(255,255,255,.55);margin-top:5px;line-height:1.6;}
+/* Watch */
 .watch-card{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;}
 .wb{width:60px;background:#2c3e50;border:1px solid rgba(255,255,255,.1);margin:0 auto;}
 .wb-t{height:44px;border-radius:5px 5px 0 0;}
 .wb-b{height:44px;border-radius:0 0 5px 5px;}
-.wcase{width:210px;height:210px;background:linear-gradient(145deg,#2c3e50,#1a252f);border-radius:36%;border:2px solid rgba(255,255,255,.1);box-shadow:0 0 0 5px #1a252f,0 0 0 7px rgba(26,71,42,.35),0 20px 60px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;position:relative;}
+.wcase{width:210px;height:210px;background:linear-gradient(145deg,#2c3e50,#1a252f);border-radius:36%;border:2px solid rgba(255,255,255,.1);box-shadow:0 0 0 5px #1a252f,0 0 0 7px rgba(8,145,178,.2),0 20px 60px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;position:relative;}
 .wcrown{position:absolute;right:-9px;top:50%;transform:translateY(-50%);width:9px;height:30px;background:#374855;border-radius:0 4px 4px 0;border:1px solid rgba(255,255,255,.07);border-left:none;}
 .wscreen{width:calc(100% - 16px);height:calc(100% - 16px);border-radius:33%;background:#060a0e;overflow:hidden;position:relative;}
-.wscreen::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.07) 2px,rgba(0,0,0,.07) 4px);pointer-events:none;z-index:5;}
 .wface{position:absolute;inset:0;padding:15px 13px;display:flex;align-items:center;justify-content:center;z-index:3;}
 .wf-time{font-family:'DM Mono',monospace;font-size:52px;font-weight:500;color:#fff;letter-spacing:-2px;line-height:1;}
+/* Stat cards */
 .mini-v{font-family:'DM Serif Display',serif;font-size:40px;margin-bottom:4px;}
 .mini-u{font-size:12px;color:var(--muted);margin-bottom:10px;}
+/* Bottom chart card */
+.dash-chart-wrap{background:#fff;border:1.5px solid #e8e3dc;border-radius:14px;padding:20px;box-shadow:0 2px 12px rgba(0,0,0,.04);}
+.dash-chart-canvas{position:relative;height:180px;}
+/* Layout */
 .d-main{display:grid;grid-template-columns:1.25fr 1fr;gap:20px;margin-bottom:20px;}
-.d-bot{display:grid;grid-template-columns:1fr 1.5fr;gap:20px;}
+.d-bot{display:grid;grid-template-columns:1fr 1.8fr;gap:20px;}
 @media(max-width:900px){.d-main,.d-bot{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
-
 <nav class="topbar">
   <a class="logo" href="dashboard.html">Mechanomyography</a>
   <div class="topbar-nav">
@@ -64,6 +70,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
   </div>
 
   <div class="d-main">
+    <!-- Profil card -->
     <div class="card prof-card">
       <div class="card-title">Profil Pasien</div>
       <div class="prof-main">
@@ -79,16 +86,13 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
         <div class="p-stat"><div class="p-stat-v" id="ps-h">—</div><div class="p-stat-l">Tangan</div></div>
       </div>
       <div class="norm-box">
-        <div class="norm-box-t">Target Rata-rata Normal (Sesuai Profil)</div>
+        <div class="norm-box-t">Target Kekuatan Normal (Sesuai Profil)</div>
         <div class="norm-v" id="norm-range">— N</div>
-        <div class="norm-note" id="norm-note">
-          Menggunakan Jurnal Medis Internasional: <br>
-          <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8902402/" target="_blank" style="color:var(--yellow); text-decoration:none;">1. Normative data for handgrip strength (2022)</a><br>
-          <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9890066/" target="_blank" style="color:var(--yellow); text-decoration:none;">2. HGS Normalized by Weight (Wang, 2023)</a>
-        </div>
+        <div class="norm-note" id="norm-note">Memuat...</div>
       </div>
     </div>
 
+    <!-- Watch -->
     <div class="card watch-card">
       <div class="card-title" style="text-align:center">MMG Watch</div>
       <div class="wb wb-t"></div>
@@ -104,80 +108,167 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     </div>
   </div>
 
+  <!-- Bottom -->
   <div class="d-bot">
+    <!-- Kekuatan terkini -->
     <div class="card tc">
-      <div class="card-title">Kekuatan Otot Terakhir</div>
-      <div class="mini-v" id="d-grip" style="color:var(--yellow)">—</div>
-      <div class="mini-u">Persentase dari target normal</div>
-      <div class="pbar mb4"><div class="pfill" id="grip-bar" style="width:0;background:var(--yellow)"></div></div>
+      <div class="card-title">Kekuatan Otot Terkini</div>
+      <div class="mini-v" id="d-grip" style="color:#0891b2">—</div>
+      <div class="mini-u">Newton (dari sensor)</div>
+      <div class="pbar mb4" style="height:10px"><div class="pfill" id="grip-bar" style="width:0;background:linear-gradient(to right,#dc2626,#e8a838,#16a34a)"></div></div>
       <span class="badge b-warn" id="grip-badge">—</span>
+      <div style="margin-top:14px;font-size:11px;color:var(--muted)" id="last-updated">—</div>
     </div>
 
+    <!-- Grafik mini tren + alerts -->
     <div class="card">
-      <div class="card-title">Status Terkini</div>
-      <div id="alert-list"><p class="sm muted">Memuat...</p></div>
-      <div style="margin-top:14px">
-        <div class="card-title">Sesi Terakhir</div>
-        <table style="width:100%;font-size:13px">
-          <tr><td class="muted" style="padding:5px 0">Tanggal</td><td id="l-date" style="text-align:right;font-weight:500">—</td></tr>
+      <div class="card-title">Tren Force Terkini (Firebase)</div>
+      <div class="dash-chart-wrap">
+        <div class="dash-chart-canvas">
+          <canvas id="dashChart"></canvas>
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <div class="card-title">Status & Sesi Terakhir</div>
+        <div id="alert-list"><p class="sm muted">Memuat...</p></div>
+        <table style="width:100%;font-size:13px;margin-top:10px">
+          <tr><td class="muted" style="padding:5px 0">Tanggal Sesi</td><td id="l-date" style="text-align:right;font-weight:500">—</td></tr>
           <tr><td class="muted" style="padding:5px 0">Durasi</td><td id="l-dur" style="text-align:right;font-weight:500">—</td></tr>
         </table>
       </div>
     </div>
   </div>
 </div>
+<div id="toast"></div>
 
 <script>
 const user = Auth.requireLogin(); if (!user) throw 0;
 Auth.fillTopbar();
 
-const norm = calcNorm(user.gender, user.age, user.weight);
+const norm     = calcNorm(user.gender, user.age, user.weight);
+const normMinN = norm.min;
+const normAvgN = norm.avg;
+const normMaxN = norm.max;
+
 setText('greeting', getGreeting(user.name));
 setText('pav', user.name[0].toUpperCase());
+document.getElementById('pav').textContent = user.name[0].toUpperCase();
 setText('pname', user.name); setText('pemail', user.email);
 setText('ps-age', user.age+' th'); setText('ps-w', user.weight+' kg');
 setText('ps-h', user.monitored_hand==='right'?'Kanan':'Kiri');
+setText('norm-range', normAvgN.toFixed(2) + ' N');
+document.getElementById('norm-note').innerHTML =
+  `${user.gender==='male'?'Laki-laki':'Perempuan'}, ${user.age} th, ${user.weight} kg<br>Min: ${normMinN.toFixed(2)} N &nbsp;|&nbsp; Max: ${normMaxN.toFixed(2)} N`;
 
-setText('norm-range', norm.avg.toFixed(2) + ' N');
-
+// Jam
 function tick() {
   const n=new Date(), h=String(n.getHours()).padStart(2,'0'), m=String(n.getMinutes()).padStart(2,'0');
   setText('wf-t', h+':'+m);
 }
 tick(); setInterval(tick, 1000);
 
+// ── DASHBOARD MINI CHART ───────────────────────────────────────
+const DASH_MAX = 20;
+const dashLabels = Array(DASH_MAX).fill('');
+const dashData   = Array(DASH_MAX).fill(null);
+
+const ctxDash = document.getElementById('dashChart').getContext('2d');
+const dashGrad = ctxDash.createLinearGradient(0, 0, 0, 160);
+dashGrad.addColorStop(0, 'rgba(8,145,178,0.15)');
+dashGrad.addColorStop(1, 'rgba(8,145,178,0)');
+
+const dashChart = new Chart(ctxDash, {
+  type: 'line',
+  data: {
+    labels: dashLabels,
+    datasets: [{
+      data: dashData,
+      borderColor: '#0891b2',
+      borderWidth: 2,
+      pointRadius: 2,
+      pointBackgroundColor: '#0891b2',
+      pointBorderColor: '#fff',
+      pointBorderWidth: 1,
+      fill: true,
+      backgroundColor: dashGrad,
+      tension: 0.4,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 200 },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#fff', borderColor: '#e8e3dc', borderWidth: 1,
+        titleColor:'#666', bodyColor:'#1c1a17', padding:10,
+        callbacks: { title: ()=>'', label: (i) => ` ${i.raw !== null ? i.raw.toFixed(3)+' N' : '—'}` }
+      },
+      annotation: {
+        annotations: {
+          la: { type:'line', yMin:normAvgN, yMax:normAvgN, borderColor:'rgba(22,163,74,0.6)', borderWidth:1.5, borderDash:[5,4] },
+          lb: { type:'line', yMin:normMinN, yMax:normMinN, borderColor:'rgba(220,38,38,0.5)', borderWidth:1, borderDash:[4,4] }
+        }
+      }
+    },
+    scales: {
+      x: { ticks:{display:false}, grid:{color:'rgba(0,0,0,0.04)',drawBorder:false} },
+      y: {
+        min:0, suggestedMax: normAvgN * 1.6,
+        ticks:{color:'#9a9489',font:{size:9,family:'DM Mono,monospace'},callback:v=>v.toFixed(1)+' N'},
+        grid:{color:'rgba(0,0,0,0.05)',drawBorder:false}
+      }
+    }
+  }
+});
+
+function pushDash(force) {
+  const now = new Date();
+  const lbl = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  dashLabels.push(lbl); dashData.push(parseFloat(force.toFixed(3)));
+  if (dashLabels.length > DASH_MAX) { dashLabels.shift(); dashData.shift(); }
+  dashChart.update('none');
+}
+
+// Load sesi terakhir
 async function loadDash() {
   try {
     const r = await API.getProgressReport();
-    const grip = r.latest_grip_pct ?? 0;
-    applyMetrics(grip);
     if (r.last_session) {
       setText('l-date', formatDate(r.last_session.ended_at));
       setText('l-dur',  formatDur(r.last_session.duration_seconds||0));
     }
-    renderAlerts(grip);
-  } catch {
-    renderAlerts(0);
-  }
-}
-
-function applyMetrics(grip) {
-  setText('d-grip', grip+'%');
-  document.getElementById('grip-bar').style.width = grip+'%';
-  document.getElementById('grip-bar').style.background = grip>=85?'#2d6a4f':grip>=65?'#e8a838':'#c84b31';
-  const gb = document.getElementById('grip-badge');
-  if (grip>=85) { gb.textContent='Normal'; gb.className='badge b-ok'; }
-  else if (grip>=65) { gb.textContent='Sedang'; gb.className='badge b-warn'; }
-  else { gb.textContent='Rendah'; gb.className='badge b-err'; }
-}
-
-function renderAlerts(grip) {
-  const items = [];
-  if (grip > 0 && grip < 65) items.push(`<div class="alrt alrt-err"><span></span><div>Kekuatan otot (${grip}%) berada di level Rendah.</div></div>`);
-  if (!items.length) items.push(`<div class="alrt alrt-ok"><span></span><div>Semua kondisi otot terpantau baik.</div></div>`);
-  document.getElementById('alert-list').innerHTML = items.join('');
+  } catch {}
 }
 loadDash();
+
+// Firebase polling untuk dashboard
+Firebase.startPolling((data) => {
+  const force = data.force;
+  pushDash(force);
+
+  // Update metric
+  setText('d-grip', force.toFixed(3) + ' N');
+  const pct = Math.min(100, (force / normMaxN) * 100);
+  document.getElementById('grip-bar').style.width = pct + '%';
+
+  const gb = document.getElementById('grip-badge');
+  if (force >= normAvgN) { gb.textContent='✓ Normal'; gb.className='badge b-ok'; }
+  else if (force >= normMinN) { gb.textContent='⚠ Sedang'; gb.className='badge b-warn'; }
+  else { gb.textContent='✗ Rendah'; gb.className='badge b-err'; }
+
+  const now = new Date();
+  setText('last-updated', `Diperbarui: ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`);
+
+  const items = [];
+  if (force < normMinN) items.push(`<div class="alrt alrt-err"><span>⚠</span><div>Force (${force.toFixed(2)} N) di bawah batas minimal ${normMinN.toFixed(2)} N</div></div>`);
+  else if (force < normAvgN) items.push(`<div class="alrt alrt-warn"><span>💪</span><div>Force (${force.toFixed(2)} N) sedang — target ${normAvgN.toFixed(2)} N</div></div>`);
+  else items.push(`<div class="alrt alrt-ok"><span>✓</span><div>Kekuatan otot normal (${force.toFixed(2)} N ≥ ${normAvgN.toFixed(2)} N)</div></div>`);
+  document.getElementById('alert-list').innerHTML = items.join('');
+
+  setTSStatus(true, 'Firebase — sensor aktif ✓');
+}, 2000);
 </script>
 </body>
 </html>

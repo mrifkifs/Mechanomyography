@@ -155,32 +155,42 @@ function getGreeting(name) { const h=new Date().getHours(); return `Selamat ${h<
 function setTSStatus(connected, msg) { const el=document.getElementById('antares-status'); const lbl=document.getElementById('antares-label'); if(!el||!lbl) return; lbl.textContent=msg||(connected?'Sensor terhubung':'Menunggu data sensor...'); el.classList.toggle('err',!connected); el.classList.add('show'); }
 
 // =====================================================================
-// RUMUS NORMATIF KEKUATAN OTOT (BERDASARKAN JURNAL MEDIS 2023-2024)
-// Sumber 1: "Normative data for handgrip strength..." (2022) - PMC8902402
-// Sumber 2: "Hand grip strength should be normalized by weight" (Wang et al., 2023) - PMC9890066
+// RUMUS NORMATIF KEKUATAN OTOT — DISESUAIKAN DENGAN RANGE SENSOR FSR (0–6 N)
+// Sensor FSR pada alat MMG ini menghasilkan nilai 0–6 Newton.
+// Norma klinis handgrip (kg) dikonversi secara proporsional ke skala 0–6 N,
+// di mana 6 N = kapasitas maksimal sensor (≈ kontraksi penuh / MVC).
+// Referensi rasio: Mathiowetz et al. (1985), Wang et al. (2023) - PMC9890066
 // =====================================================================
 function calcNorm(gender, age, weight) {
-  let baseKg = gender === 'male' ? 49.7 : 29.7;
-  let idealW = gender === 'male' ? 70 : 60;
-  
+  // Rasio normatif relatif berdasarkan gender, usia, berat
+  // Base ratio: laki-laki lebih kuat ~1.0, perempuan ~0.60
+  let baseRatio = gender === 'male' ? 1.0 : 0.60;
+  let idealW    = gender === 'male' ? 70  : 60;
+
+  // Faktor usia (degrades linearly)
   let ageFactor = 1.0;
-  if (age >= 40 && age < 50) ageFactor = 0.95;
+  if      (age >= 40 && age < 50) ageFactor = 0.95;
   else if (age >= 50 && age < 60) ageFactor = 0.85;
   else if (age >= 60 && age < 70) ageFactor = 0.75;
-  else if (age >= 70) ageFactor = 0.65;
-  
-  let weightDiff = weight - idealW;
-  let weightFactor = 1 + (weightDiff * 0.005); 
-  if (weightFactor > 1.15) weightFactor = 1.15; 
-  if (weightFactor < 0.85) weightFactor = 0.85;
-  
-  let targetKg = baseKg * ageFactor * weightFactor;
-  
-  return { 
-    min: parseFloat((targetKg * 0.7 * 9.806).toFixed(2)),   // Batas Sedang/Lemah
-    avg: parseFloat((targetKg * 9.806).toFixed(2)),         // Target Normal
-    max: parseFloat((targetKg * 1.2 * 9.806).toFixed(2))    // Maksimal Kuat
-  };
+  else if (age >= 70)              ageFactor = 0.65;
+
+  // Faktor berat badan (±5% per 10 kg dari ideal, max ±15%)
+  let wf = 1 + ((weight - idealW) * 0.005);
+  if (wf > 1.15) wf = 1.15;
+  if (wf < 0.85) wf = 0.85;
+
+  // targetRatio = proporsi MVC yang diharapkan saat kondisi normal
+  // Untuk laki-laki muda ideal → targetRatio = 0.80 (80% dari max sensor 6 N)
+  // Untuk perempuan atau usia tua → lebih rendah proporsional
+  const FSR_MAX  = 6.0;                          // Batas fisik sensor
+  const MVC_FRAC = 0.80;                         // Fraksi MVC yang = "normal"
+  let targetRatio = baseRatio * ageFactor * wf * MVC_FRAC;
+
+  const avg = parseFloat((FSR_MAX * targetRatio).toFixed(3));
+  const min = parseFloat((avg * 0.70).toFixed(3));   // 70% dari target = batas minimal
+  const max = parseFloat(Math.min(FSR_MAX, avg * 1.20).toFixed(3)); // 120%, cap 6 N
+
+  return { min, avg, max };
 }
 
 // SVG Export — Profesional, detail, dengan grid, legend, statistik, dan warna status

@@ -63,7 +63,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
       <p class="sm muted">Sensor FSR dipasang di pergelangan tangan — data realtime dari Firebase.</p>
     </div>
     <span class="rec-t" id="rec-t">00:00</span>
-    <button class="btn btn-p" id="rec-btn" onclick="toggleRec()">⏺ Mulai / Nyalakan Alat</button>
+    <button class="btn btn-p" id="rec-btn" onclick="toggleRec()">⏺ Mulai Sesi</button>
   </div>
 
   <div class="live-layout">
@@ -309,33 +309,59 @@ function pushForcePoint(force) {
   liveChart.update('none');
 }
 
-// ── RECORDING ──────────────────────────────────────────────────
-let sessionId=null, isRec=false, recSec=0, recTmr, buf=[];
+// ── SESSION & BUFFER ────────────────────────────────────────────
+// Buffer langsung aktif sejak halaman dibuka — data otomatis terkumpul
+// Tombol hanya untuk SIMPAN sesi ke riwayat
+let sessionId = null, isSaving = false, recSec = 0, recTmr = null;
+let buf = [];   // buffer utama, diisi otomatis sejak polling mulai
+let sessionStarted = false;
+
+// Auto-start timer saat data pertama masuk
+function ensureTimerRunning() {
+  if (recTmr) return;
+  recTmr = setInterval(() => {
+    recSec++;
+    setText('rec-t', formatDur(recSec));
+  }, 1000);
+}
+
 async function toggleRec() {
   const btn = document.getElementById('rec-btn');
-  if (!isRec) {
-    try {
-      await Firebase.setDevicePower(true);
-      try { const r=await API.startSession(); sessionId=r.session.id; } catch {}
-      isRec=true; recSec=0; buf=[];
-      btn.textContent='⏹ Stop & Matikan Alat'; btn.style.background='var(--red)';
-      recTmr=setInterval(()=>{ recSec++; setText('rec-t',formatDur(recSec)); if(recSec%5===0&&buf.length){try{API.pushMmgBatch(sessionId,buf);}catch{}} },1000);
-      showToast('Alat dinyalakan & sesi rekaman dimulai','success');
-    } catch(e){ showToast('Gagal: '+e.message,'error'); }
+  if (!isSaving) {
+    // Mulai sesi baru: reset buffer & timer
+    buf = []; recSec = 0; sessionStarted = true;
+    if (recTmr) { clearInterval(recTmr); recTmr = null; }
+    ensureTimerRunning();
+    try { const r = await API.startSession(); sessionId = r.session.id; } catch {}
+    btn.innerHTML = '💾 Simpan Sesi'; btn.style.background = 'var(--red)';
+    isSaving = true;
+    showToast('Sesi rekaman dimulai — data terkumpul otomatis', 'success');
   } else {
-    clearInterval(recTmr); isRec=false;
-    btn.textContent='⏺ Mulai / Nyalakan Alat'; btn.style.background='';
-    await Firebase.setDevicePower(false);
-    if(buf.length){try{await API.pushMmgBatch(sessionId,buf);}catch{}}
-    try { if(sessionId) await API.endSession(sessionId,{duration_seconds:recSec}); } catch {}
-    showToast('Alat dimatikan & sesi selesai tersimpan','success'); sessionId=null;
+    // Simpan sesi
+    isSaving = false; sessionStarted = false;
+    if (recTmr) { clearInterval(recTmr); recTmr = null; }
+    btn.innerHTML = '⏺ Mulai Sesi'; btn.style.background = '';
+    if (buf.length) {
+      try { await API.pushMmgBatch(sessionId, buf); } catch {}
+      try {
+        const avgGrip = buf.reduce((a,b)=>a+b.force,0)/buf.length;
+        await API.endSession(sessionId, { duration_seconds: recSec, avg_grip_pct: avgGrip });
+      } catch {}
+      showToast(`Sesi tersimpan — ${buf.length} data, durasi ${formatDur(recSec)}`, 'success');
+    } else {
+      showToast('Tidak ada data untuk disimpan', 'error');
+    }
+    sessionId = null; buf = []; recSec = 0;
+    setText('rec-t', '00:00');
   }
 }
 
 // ── FIREBASE POLLING ───────────────────────────────────────────
+// Data mengalir otomatis — buffer diisi selalu (tidak perlu tekan tombol dulu)
 Firebase.startPolling((data) => {
   const force = data.force;
   pushForcePoint(force);
+  ensureTimerRunning();  // mulai timer saat data pertama masuk
   setText('lm-force', force.toFixed(3));
 
   let statNow = 'Rendah';
@@ -355,13 +381,17 @@ Firebase.startPolling((data) => {
   const pct = Math.min(100, (force / normMaxN) * 100);
   document.getElementById('prog-bar').style.width = pct + '%';
 
-  if (isRec) buf.push({ timestamp: new Date().toISOString(), force, status: statNow });
+  // Selalu masukkan ke buffer (PDF/SVG bisa export kapanpun)
+  buf.push({ timestamp: new Date().toISOString(), force, status: statNow });
+  // Batasi buffer di memori max 500 titik supaya tidak membengkak
+  if (buf.length > 500) buf.shift();
+
   setTSStatus(true, 'Firebase — sensor aktif ✓');
 }, 2000);
 
 // ── EXPORT PDF ─────────────────────────────────────────────────
 function doExportPDF() {
-  if (!buf.length) { showToast('Belum ada data. Mulai sesi terlebih dahulu.','error'); return; }
+  if (!buf.length) { showToast('Menunggu data dari sensor...','error'); return; }
   const win = window.open('', '_blank');
   const total = buf.length;
   const avg = (buf.reduce((a,b)=>a+b.force,0)/total).toFixed(2);
@@ -466,7 +496,7 @@ function doExportPDF() {
 
 // ── EXPORT SVG ─────────────────────────────────────────────────
 function doExportSVG() {
-  if (!buf.length) { showToast('Belum ada data. Mulai sesi terlebih dahulu.','error'); return; }
+  if (!buf.length) { showToast('Menunggu data dari sensor...','error'); return; }
   exportToSVG(buf, `Grafik Kekuatan Otot — ${user.name} — ${new Date().toLocaleDateString('id-ID')}`);
 }
 </script>

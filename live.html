@@ -62,8 +62,14 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
       <h1 class="serif" style="font-size:24px;margin-bottom:3px">Monitoring MMG Live</h1>
       <p class="sm muted">Sensor FSR dipasang di pergelangan tangan — data realtime dari Firebase.</p>
     </div>
-    <span class="rec-t" id="rec-t">00:00</span>
-    <button class="btn btn-p" id="rec-btn" onclick="toggleRec()">⏺ Mulai Sesi</button>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="rec-t" id="rec-t" style="display:none">00:00</span>
+      <div id="live-status-badge" style="display:flex;align-items:center;gap:7px;background:var(--bg2);padding:8px 16px;border-radius:10px;font-size:12px;color:var(--muted);font-weight:600">
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--muted);display:inline-block" id="live-dot"></span>
+        <span id="live-status-txt">Menunggu sensor...</span>
+      </div>
+      <button class="btn btn-p" id="save-btn" onclick="saveSession()" style="display:none">💾 Simpan Sesi</button>
+    </div>
   </div>
 
   <div class="live-layout">
@@ -310,63 +316,75 @@ function pushForcePoint(force) {
 }
 
 // ── SESSION & BUFFER ────────────────────────────────────────────
-// Buffer langsung aktif sejak halaman dibuka — data otomatis terkumpul
-// Tombol hanya untuk SIMPAN sesi ke riwayat
-let sessionId = null, isSaving = false, recSec = 0, recTmr = null;
-let buf = [];   // buffer utama, diisi otomatis sejak polling mulai
-let sessionStarted = false;
+let sessionId = null, recSec = 0, recTmr = null;
+let buf = [];
+let dataReceived = false;  // flag: apakah sudah pernah dapat data
 
-// Auto-start timer saat data pertama masuk
 function ensureTimerRunning() {
   if (recTmr) return;
   recTmr = setInterval(() => {
     recSec++;
     setText('rec-t', formatDur(recSec));
   }, 1000);
+  document.getElementById('rec-t').style.display = '';
 }
 
-async function toggleRec() {
-  const btn = document.getElementById('rec-btn');
-  if (!isSaving) {
-    // Mulai sesi baru: reset buffer & timer
-    buf = []; recSec = 0; sessionStarted = true;
-    if (recTmr) { clearInterval(recTmr); recTmr = null; }
-    ensureTimerRunning();
-    try { const r = await API.startSession(); sessionId = r.session.id; } catch {}
-    btn.innerHTML = '💾 Simpan Sesi'; btn.style.background = 'var(--red)';
-    isSaving = true;
-    showToast('Sesi rekaman dimulai — data terkumpul otomatis', 'success');
+function setLiveStatus(connected) {
+  const dot = document.getElementById('live-dot');
+  const txt = document.getElementById('live-status-txt');
+  if (connected) {
+    dot.style.background = '#16a34a';
+    dot.style.boxShadow = '0 0 6px #16a34a';
+    txt.textContent = 'Sensor aktif — data masuk';
+    txt.style.color = 'var(--accent)';
   } else {
-    // Simpan sesi
-    isSaving = false; sessionStarted = false;
-    if (recTmr) { clearInterval(recTmr); recTmr = null; }
-    btn.innerHTML = '⏺ Mulai Sesi'; btn.style.background = '';
-    if (buf.length) {
-      try { await API.pushMmgBatch(sessionId, buf); } catch {}
-      try {
-        const avgGrip = buf.reduce((a,b)=>a+b.force,0)/buf.length;
-        await API.endSession(sessionId, { duration_seconds: recSec, avg_grip_pct: avgGrip });
-      } catch {}
-      showToast(`Sesi tersimpan — ${buf.length} data, durasi ${formatDur(recSec)}`, 'success');
-    } else {
-      showToast('Tidak ada data untuk disimpan', 'error');
-    }
-    sessionId = null; buf = []; recSec = 0;
-    setText('rec-t', '00:00');
+    dot.style.background = 'var(--muted)';
+    dot.style.boxShadow = 'none';
+    txt.textContent = 'Menunggu sensor...';
+    txt.style.color = 'var(--muted)';
   }
 }
 
+async function saveSession() {
+  const btn = document.getElementById('save-btn');
+  if (!buf.length) { showToast('Tidak ada data untuk disimpan', 'error'); return; }
+  btn.disabled = true; btn.textContent = 'Menyimpan...';
+  try {
+    const r = await API.startSession(); sessionId = r.session.id;
+    await API.pushMmgBatch(sessionId, buf);
+    const avgGrip = buf.reduce((a,b)=>a+b.force,0)/buf.length;
+    await API.endSession(sessionId, { duration_seconds: recSec, avg_grip_pct: avgGrip });
+    showToast(`Sesi tersimpan — ${buf.length} data, durasi ${formatDur(recSec)}`, 'success');
+    buf = []; recSec = 0; sessionId = null;
+    if (recTmr) { clearInterval(recTmr); recTmr = null; }
+    setText('rec-t', '00:00');
+    document.getElementById('rec-t').style.display = 'none';
+    btn.style.display = 'none';
+  } catch(e) {
+    showToast('Gagal menyimpan sesi', 'error');
+  }
+  btn.disabled = false; btn.textContent = '💾 Simpan Sesi';
+}
+
 // ── FIREBASE POLLING ───────────────────────────────────────────
-// Data mengalir otomatis — buffer diisi selalu (tidak perlu tekan tombol dulu)
 Firebase.startPolling((data) => {
   const force = data.force;
   pushForcePoint(force);
-  ensureTimerRunning();  // mulai timer saat data pertama masuk
-  setText('lm-force', force.toFixed(3));
 
-  let statNow = 'Rendah';
-  if (force >= normAvgN) statNow = 'Normal';
-  else if (force >= normMinN) statNow = 'Sedang';
+  // Saat data pertama masuk: mulai timer, tampilkan tombol simpan
+  if (!dataReceived) {
+    dataReceived = true;
+    ensureTimerRunning();
+    document.getElementById('save-btn').style.display = '';
+    setLiveStatus(true);
+  }
+
+  // Selalu masukkan ke buffer
+  const statNow = force >= normAvgN ? 'Normal' : force >= normMinN ? 'Sedang' : 'Rendah';
+  buf.push({ timestamp: new Date().toISOString(), force, status: statNow });
+  if (buf.length > 500) buf.shift();
+
+  setText('lm-force', force.toFixed(3));
   setText('lm-status', statNow);
 
   const fEl = document.getElementById('s-force-big');
@@ -380,13 +398,6 @@ Firebase.startPolling((data) => {
 
   const pct = Math.min(100, (force / normMaxN) * 100);
   document.getElementById('prog-bar').style.width = pct + '%';
-
-  // Selalu masukkan ke buffer (PDF/SVG bisa export kapanpun)
-  buf.push({ timestamp: new Date().toISOString(), force, status: statNow });
-  // Batasi buffer di memori max 500 titik supaya tidak membengkak
-  if (buf.length > 500) buf.shift();
-
-  setTSStatus(true, 'Firebase — sensor aktif ✓');
 }, 2000);
 
 // ── EXPORT PDF ─────────────────────────────────────────────────

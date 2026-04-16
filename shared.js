@@ -117,13 +117,18 @@ const Firebase = {
     } catch (e) { return []; }
   },
   startPolling: (callback, intervalMs = 2000) => {
-    let lastForce = -1;
+    let consecutiveErrors = 0;
     const poll = async () => {
       const data = await Firebase.fetchLatest();
-      if (data && data.force !== lastForce) {
-        lastForce = data.force;
+      if (data !== null) {
+        consecutiveErrors = 0;
         callback(data);
         setTSStatus(true, 'Sensor terhubung ✓');
+      } else {
+        consecutiveErrors++;
+        if (consecutiveErrors >= 3) {
+          setTSStatus(false, 'Menunggu data sensor...');
+        }
       }
     };
     poll();

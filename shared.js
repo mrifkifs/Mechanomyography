@@ -4,6 +4,11 @@
    ================================================ */
 
 const FB_URL      = 'https://send-mmg-default-rtdb.asia-southeast1.firebasedatabase.app';
+// Arduino menulis ke fsr1/realtime, fsr2/realtime, fsr3/realtime
+const FB_FSR1     = `${FB_URL}/fsr1/realtime.json`;
+const FB_FSR2     = `${FB_URL}/fsr2/realtime.json`;
+const FB_FSR3     = `${FB_URL}/fsr3/realtime.json`;
+// Untuk kompatibilitas mundur (events & control tetap pakai path lama)
 const FB_REALTIME = `${FB_URL}/fsr/realtime.json`;
 const FB_EVENTS   = `${FB_URL}/fsr/event.json?orderBy="$key"&limitToLast=100`;
 const FB_CONTROL  = `${FB_URL}/fsr/control.json`;
@@ -72,13 +77,34 @@ const API = {
 const Firebase = {
   fetchLatest: async () => {
     try {
-      const res = await fetch(FB_REALTIME);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      if (!json || json.force === undefined) return null;
-      return { force: parseFloat(json.force || 0), status: json.status || '—', timestamp: Date.now() };
+      // Baca ketiga sensor sesuai path Arduino: fsr1/realtime, fsr2/realtime, fsr3/realtime
+      const [r1, r2, r3] = await Promise.all([
+        fetch(FB_FSR1).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(FB_FSR2).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(FB_FSR3).then(r => r.ok ? r.json() : null).catch(() => null),
+      ]);
+      // Fallback ke path lama jika semua null
+      if (!r1 && !r2 && !r3) {
+        const res = await fetch(FB_REALTIME);
+        if (!res.ok) return null;
+        const json = await res.json();
+        if (!json || json.force === undefined) return null;
+        return { force: parseFloat(json.force || 0), fsr1: null, fsr2: null, fsr3: null, status: json.status || '\u2014', timestamp: Date.now() };
+      }
+      const f1 = r1 ? parseFloat(r1.force || 0) : 0;
+      const f2 = r2 ? parseFloat(r2.force || 0) : 0;
+      const f3 = r3 ? parseFloat(r3.force || 0) : 0;
+      const mvc1 = r1 ? parseFloat(r1.mvc || 0) : 0;
+      const mvc2 = r2 ? parseFloat(r2.mvc || 0) : 0;
+      const mvc3 = r3 ? parseFloat(r3.mvc || 0) : 0;
+      // Rata-rata sensor yang aktif (force > 0)
+      const active = [f1, f2, f3].filter(f => f > 0);
+      const force  = active.length ? active.reduce((a, b) => a + b, 0) / active.length : 0;
+      const mvc    = (mvc1 + mvc2 + mvc3) / 3;
+      return { force, fsr1: f1, fsr2: f2, fsr3: f3, mvc1, mvc2, mvc3, mvc, status: '\u2014', timestamp: Date.now() };
     } catch (e) { return null; }
   },
+
   fetchEvents: async () => {
     try {
       const res = await fetch(FB_EVENTS);

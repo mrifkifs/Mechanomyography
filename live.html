@@ -404,6 +404,10 @@ Firebase.startPolling((data) => {
 function doExportPDF() {
   if (!buf.length) { showToast('Menunggu data dari sensor...','error'); return; }
   const win = window.open('', '_blank');
+if (!win) {
+  showToast('Gagal! Browser memblokir pop-up. Mohon izinkan pop-up di pengaturan browser Anda.', 'error');
+  return;
+}
   const total = buf.length;
   const avg = (buf.reduce((a,b)=>a+b.force,0)/total).toFixed(2);
   const maxF = Math.max(...buf.map(b=>b.force)).toFixed(3);

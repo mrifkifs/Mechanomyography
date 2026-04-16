@@ -267,6 +267,10 @@ function exportPDFHistory() {
   if (!events.length) { showToast('Belum ada data riwayat.','error'); return; }
 
   const win = window.open('', '_blank');
+  if (!win) {
+    showToast('Gagal! Browser memblokir pop-up. Mohon izinkan pop-up (Always allow) di pojok kanan atas browser.', 'error');
+    return;
+  }
   const total = events.length;
   const avg   = (events.reduce((a,b)=>a+b.force,0)/total).toFixed(2);
   const maxF  = Math.max(...events.map(e=>e.force)).toFixed(3);

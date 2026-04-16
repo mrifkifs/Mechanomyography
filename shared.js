@@ -5,9 +5,9 @@
 
 const FB_URL      = 'https://send-mmg-default-rtdb.asia-southeast1.firebasedatabase.app';
 // Arduino menulis ke fsr1/realtime, fsr2/realtime, fsr3/realtime
-const FB_FSR1     = `${FB_URL}/fsr1/realtime.json`;
-const FB_FSR2     = `${FB_URL}/fsr2/realtime.json`;
-const FB_FSR3     = `${FB_URL}/fsr3/realtime.json`;
+const FB_FSR1     = `${FB_URL}/fsr1.json`;
+const FB_FSR2     = `${FB_URL}/fsr2.json`;
+const FB_FSR3     = `${FB_URL}/fsr3.json`;
 // Untuk kompatibilitas mundur (events & control tetap pakai path lama)
 const FB_REALTIME = `${FB_URL}/fsr/realtime.json`;
 const FB_EVENTS   = `${FB_URL}/fsr/event.json?orderBy="$key"&limitToLast=100`;
@@ -94,9 +94,9 @@ const Firebase = {
       const f1 = r1 ? parseFloat(r1.force || 0) : 0;
       const f2 = r2 ? parseFloat(r2.force || 0) : 0;
       const f3 = r3 ? parseFloat(r3.force || 0) : 0;
-      const mvc1 = r1 ? parseFloat(r1.mvc || 0) : 0;
-      const mvc2 = r2 ? parseFloat(r2.mvc || 0) : 0;
-      const mvc3 = r3 ? parseFloat(r3.mvc || 0) : 0;
+      const mvc1 = r1 ? parseFloat(r1.mvc_percent || 0) : 0;
+      const mvc2 = r2 ? parseFloat(r2.mvc_percent || 0) : 0;
+      const mvc3 = r3 ? parseFloat(r3.mvc_percent || 0) : 0;
       // Rata-rata sensor yang aktif (force > 0)
       const active = [f1, f2, f3].filter(f => f > 0);
       const force  = active.length ? active.reduce((a, b) => a + b, 0) / active.length : 0;

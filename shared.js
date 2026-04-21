@@ -116,14 +116,34 @@ const Firebase = {
       })).sort((a,b) => a.timestamp - b.timestamp);
     } catch (e) { return []; }
   },
+  pushEvent: async (force, status) => {
+    try {
+      const ts = Date.now();
+      await fetch(`${FB_URL}/fsr/event/${ts}.json`, {
+        method: 'PUT',
+        body: JSON.stringify({ force: parseFloat(force.toFixed(3)), status: status || '—', timestamp: ts })
+      });
+    } catch(e) { /* silent */ }
+  },
+
   startPolling: (callback, intervalMs = 2000) => {
     let consecutiveErrors = 0;
+    let lastPushedTs = 0;
+    const PUSH_INTERVAL = 10000; // push ke event log tiap 10 detik
+
     const poll = async () => {
       const data = await Firebase.fetchLatest();
       if (data !== null) {
         consecutiveErrors = 0;
         callback(data);
         setTSStatus(true, 'Sensor terhubung ✓');
+
+        // Auto-push ke fsr/event untuk riwayat — hanya kalau force > 0 dan sudah 10 detik sejak push terakhir
+        const now = Date.now();
+        if (data.force > 0 && (now - lastPushedTs) >= PUSH_INTERVAL) {
+          lastPushedTs = now;
+          Firebase.pushEvent(data.force, data.status);
+        }
       } else {
         consecutiveErrors++;
         if (consecutiveErrors >= 3) {

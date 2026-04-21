@@ -118,6 +118,7 @@ const normMaxN = norm.max;
 
 async function loadHistory() {
   const events = await Firebase.fetchEvents();
+  window.__fb_events = events; // Set di sini agar selalu tersedia untuk export PDF/SVG
   let sessions = [];
   try { const r = await API.getSessions(); sessions = r.data || []; } catch {}
 
@@ -163,7 +164,6 @@ function drawChart(events) {
     ctx.restore(); return;
   }
 
-  window.__fb_events = events;
   const step = Math.max(1, Math.floor(events.length / 12));
 
   const labels = events.map((e,i) =>

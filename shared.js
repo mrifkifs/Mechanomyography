@@ -1,17 +1,13 @@
 /* ================================================
    Mechanomyography — Shared JS
-   Platform: ThingSpeak IoT / Firebase
+   Platform: Firebase Realtime Database
+   Arduino path: /MMG_Realtime
+   Fields: ADC1, ADC2, ADC3, ADC_avg, force_avg, mvc_avg, status_avg, timestamp
    ================================================ */
 
 const FB_URL      = 'https://send-mmg-default-rtdb.asia-southeast1.firebasedatabase.app';
-// Arduino menulis ke fsr1/realtime, fsr2/realtime, fsr3/realtime
-const FB_FSR1     = `${FB_URL}/fsr1.json`;
-const FB_FSR2     = `${FB_URL}/fsr2.json`;
-const FB_FSR3     = `${FB_URL}/fsr3.json`;
-// Untuk kompatibilitas mundur (events & control tetap pakai path lama)
-const FB_REALTIME = `${FB_URL}/fsr/realtime.json`;
-const FB_EVENTS   = `${FB_URL}/fsr/event.json?orderBy="$key"&limitToLast=100`;
-const FB_CONTROL  = `${FB_URL}/fsr/control.json`;
+const FB_REALTIME = `${FB_URL}/MMG_Realtime.json`;
+const FB_EVENTS   = `${FB_URL}/MMG_Events.json?orderBy="$key"&limitToLast=100`;
 
 const DB = {
   getUsers:     () => JSON.parse(localStorage.getItem('myo_users')    || '[]'),
@@ -77,31 +73,20 @@ const API = {
 const Firebase = {
   fetchLatest: async () => {
     try {
-      // Baca ketiga sensor sesuai path Arduino: fsr1/realtime, fsr2/realtime, fsr3/realtime
-      const [r1, r2, r3] = await Promise.all([
-        fetch(FB_FSR1).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(FB_FSR2).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(FB_FSR3).then(r => r.ok ? r.json() : null).catch(() => null),
-      ]);
-      // Fallback ke path lama jika semua null
-      if (!r1 && !r2 && !r3) {
-        const res = await fetch(FB_REALTIME);
-        if (!res.ok) return null;
-        const json = await res.json();
-        if (!json || json.force === undefined) return null;
-        return { force: parseFloat(json.force || 0), fsr1: null, fsr2: null, fsr3: null, status: json.status || '\u2014', timestamp: Date.now() };
-      }
-      const f1 = r1 ? parseFloat(r1.force || 0) : 0;
-      const f2 = r2 ? parseFloat(r2.force || 0) : 0;
-      const f3 = r3 ? parseFloat(r3.force || 0) : 0;
-      const mvc1 = r1 ? parseFloat(r1.mvc_percent || 0) : 0;
-      const mvc2 = r2 ? parseFloat(r2.mvc_percent || 0) : 0;
-      const mvc3 = r3 ? parseFloat(r3.mvc_percent || 0) : 0;
-      // Rata-rata sensor yang aktif (force > 0)
-      const active = [f1, f2, f3].filter(f => f > 0);
-      const force  = active.length ? active.reduce((a, b) => a + b, 0) / active.length : 0;
-      const mvc    = (mvc1 + mvc2 + mvc3) / 3;
-      return { force, fsr1: f1, fsr2: f2, fsr3: f3, mvc1, mvc2, mvc3, mvc, status: '\u2014', timestamp: Date.now() };
+      const res = await fetch(FB_REALTIME);
+      if (!res.ok) return null;
+      const json = await res.json();
+      if (!json || json.force_avg === undefined) return null;
+      return {
+        force:   parseFloat(json.force_avg  || 0),
+        mvc:     parseFloat(json.mvc_avg    || 0),
+        status:  json.status_avg || '\u2014',
+        adc1:    parseInt(json.ADC1   || 0),
+        adc2:    parseInt(json.ADC2   || 0),
+        adc3:    parseInt(json.ADC3   || 0),
+        adc_avg: parseFloat(json.ADC_avg || 0),
+        timestamp: Date.now()
+      };
     } catch (e) { return null; }
   },
 
@@ -116,12 +101,12 @@ const Firebase = {
       })).sort((a,b) => a.timestamp - b.timestamp);
     } catch (e) { return []; }
   },
-  pushEvent: async (force, status) => {
+  pushEvent: async (force, mvc, status) => {
     try {
       const ts = Date.now();
-      await fetch(`${FB_URL}/fsr/event/${ts}.json`, {
+      await fetch(`${FB_URL}/MMG_Events/${ts}.json`, {
         method: 'PUT',
-        body: JSON.stringify({ force: parseFloat(force.toFixed(3)), status: status || '—', timestamp: ts })
+        body: JSON.stringify({ force: parseFloat(force.toFixed(3)), mvc: parseFloat((mvc||0).toFixed(1)), status: status || '\u2014', timestamp: ts })
       });
     } catch(e) { /* silent */ }
   },
@@ -142,7 +127,7 @@ const Firebase = {
         const now = Date.now();
         if (data.force > 0 && (now - lastPushedTs) >= PUSH_INTERVAL) {
           lastPushedTs = now;
-          Firebase.pushEvent(data.force, data.status);
+          Firebase.pushEvent(data.force, data.mvc, data.status);
         }
       } else {
         consecutiveErrors++;

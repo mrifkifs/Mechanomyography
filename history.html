@@ -133,6 +133,11 @@ async function loadHistory() {
   else setTSStatus(false, 'Belum ada data sensor');
 }
 
+function getSessionData(sessionId) {
+  const all = JSON.parse(localStorage.getItem('myo_session_data') || '{}');
+  return all[sessionId] || null;
+}
+
 function renderTable(sessions) {
   if (!sessions.length) { document.getElementById('empty-state').style.display='block'; return; }
   document.getElementById('sess-body').innerHTML = sessions.map((s,i) => `
@@ -143,8 +148,8 @@ function renderTable(sessions) {
       <td><span class="badge b-ok">Selesai</span></td>
       <td>
         <div style="display:flex;gap:6px">
-          <button class="btn btn-o btn-sm" onclick="exportPDFHistory()">PDF</button>
-          <button class="btn btn-o btn-sm" onclick="exportCSVHistory()">CSV</button>
+          <button class="btn btn-o btn-sm" onclick="exportPDFSession(${s.id}, '${s.started_at}')">PDF</button>
+          <button class="btn btn-o btn-sm" onclick="exportCSVSession(${s.id}, '${s.started_at}')">CSV</button>
           <button class="btn btn-o btn-sm" style="color:var(--red);border-color:var(--red)" onclick="doDelete(${s.id})">Hapus</button>
         </div>
       </td>
@@ -260,6 +265,174 @@ async function doDelete(id) {
     showToast('Sesi berhasil dihapus','success');
     loadHistory();
   } else { showToast('Password salah! Gagal menghapus','error'); }
+}
+
+function exportCSVSession(sessionId, startedAt) {
+  const data = getSessionData(sessionId);
+  if (!data || !data.length) { showToast('Data sesi tidak ditemukan.', 'error'); return; }
+  const u = Auth.user() || {};
+  const tgl = startedAt ? startedAt.split('T')[0] : new Date().toISOString().slice(0,10);
+  let csv = 'No,Waktu,Force (N),MVC (%),Status\n';
+  data.forEach((e, i) => {
+    const waktu = new Date(e.timestamp).toLocaleString('id-ID');
+    const mvc   = e.mvc !== undefined ? parseFloat(e.mvc).toFixed(1) : '—';
+    csv += `${i+1},"${waktu}",${parseFloat(e.force).toFixed(3)},${mvc},${e.status||'—'}\n`;
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `Sesi_MMG_${u.name||'Pasien'}_${tgl}.csv`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('CSV sesi berhasil diunduh ✓', 'success');
+}
+
+function exportPDFSession(sessionId, startedAt) {
+  const data = getSessionData(sessionId);
+  if (!data || !data.length) { showToast('Data sesi tidak ditemukan.', 'error'); return; }
+  const u = Auth.user() || {};
+  const total = data.length;
+  const forces = data.map(e => parseFloat(e.force));
+  const avg  = (forces.reduce((a,b)=>a+b,0)/total).toFixed(2);
+  const maxF = Math.max(...forces).toFixed(3);
+  const minF = Math.min(...forces).toFixed(3);
+  const nNormal = data.filter(e=>parseFloat(e.force)>=normAvgN).length;
+  const nSedang = data.filter(e=>parseFloat(e.force)>=normMinN&&parseFloat(e.force)<normAvgN).length;
+  const nRendah = data.filter(e=>parseFloat(e.force)<normMinN).length;
+  let kualitas = '🔴 Kurang (di bawah batas minimal)';
+  if (avg >= normAvgN) kualitas = '🟢 Sangat Baik';
+  else if (avg >= normMinN) kualitas = '🟡 Baik (di atas batas minimal)';
+  let trend = 'Data belum cukup';
+  if (total > 5) {
+    const n = Math.max(Math.floor(total*0.3),1);
+    const dA = forces.slice(0,n).reduce((a,b)=>a+b,0)/n;
+    const dB = forces.slice(-n).reduce((a,b)=>a+b,0)/n;
+    const d = dB - dA;
+    if (d > 0.3) trend = '🟢 Meningkat — kekuatan membaik';
+    else if (d < -0.3) trend = '🔴 Menurun — potensi kelelahan';
+    else trend = '🟡 Stabil';
+  }
+  const rows = data.map((e,i) => {
+    let s='Rendah',sc='#dc2626';
+    if(parseFloat(e.force)>=normAvgN){s='Normal';sc='#16a34a';}
+    else if(parseFloat(e.force)>=normMinN){s='Sedang';sc='#e8a838';}
+    return `<tr style="background:${i%2?'#f9fafb':'#fff'}">
+      <td>${i+1}</td>
+      <td>${new Date(e.timestamp).toLocaleString('id-ID')}</td>
+      <td style="font-weight:600">${parseFloat(e.force).toFixed(3)} N</td>
+      <td><span style="color:${sc};font-weight:700">${s}</span></td>
+    </tr>`;
+  }).join('');
+
+  // Buat SVG grafik inline
+  const W=760,H=260,pL=55,pR=20,pT=16,pB=42;
+  const cW=W-pL-pR,cH=H-pT-pB;
+  const maxV=Math.max(...forces,normAvgN*1.2);
+  const toX=i=>pL+(i/Math.max(forces.length-1,1))*cW;
+  const toY=v=>pT+cH-(v/maxV)*cH;
+  let path=forces.map((f,i)=>(i===0?'M':'L')+toX(i).toFixed(1)+' '+toY(f).toFixed(1)).join(' ');
+  let area=path+' L '+toX(forces.length-1).toFixed(1)+' '+(pT+cH)+' L '+pL+' '+(pT+cH)+' Z';
+  const yAvg=toY(normAvgN),yMin=toY(normMinN);
+  const step=Math.max(1,Math.floor(forces.length/8));
+  let xLbls=data.map((e,i)=>i%step!==0&&i!==data.length-1?'':'<text x="'+toX(i).toFixed(1)+'" y="'+(pT+cH+13)+'" text-anchor="middle" font-size="9" fill="#888">'+new Date(e.timestamp).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+'</text>').join('');
+  let yLbls='';for(let i=0;i<=5;i++){const v=maxV*i/5;const y=toY(v);yLbls+='<text x="'+(pL-5)+'" y="'+(y+4).toFixed(1)+'" text-anchor="end" font-size="9" fill="#888">'+v.toFixed(1)+'</text>';}
+  const chartSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="width:100%;height:100%">
+    <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0891b2" stop-opacity="0.2"/><stop offset="100%" stop-color="#0891b2" stop-opacity="0"/></linearGradient></defs>
+    <path d="${area}" fill="url(#g)"/>
+    <line x1="${pL}" y1="${yAvg.toFixed(1)}" x2="${W-pR}" y2="${yAvg.toFixed(1)}" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <text x="${W-pR-2}" y="${(yAvg-4).toFixed(1)}" text-anchor="end" font-size="9" fill="#16a34a">Target ${normAvgN.toFixed(2)} N</text>
+    <line x1="${pL}" y1="${yMin.toFixed(1)}" x2="${W-pR}" y2="${yMin.toFixed(1)}" stroke="#dc2626" stroke-width="1" stroke-dasharray="5 4"/>
+    <text x="${W-pR-2}" y="${(yMin-4).toFixed(1)}" text-anchor="end" font-size="9" fill="#dc2626">Min ${normMinN.toFixed(2)} N</text>
+    <path d="${path}" fill="none" stroke="#0891b2" stroke-width="2" stroke-linejoin="round"/>
+    ${xLbls}${yLbls}
+    <line x1="${pL}" y1="${pT}" x2="${pL}" y2="${pT+cH}" stroke="#ccc" stroke-width="1"/>
+    <line x1="${pL}" y1="${pT+cH}" x2="${W-pR}" y2="${pT+cH}" stroke="#ccc" stroke-width="1"/>
+  </svg>`;
+
+  const win = window.open('', '_blank');
+  if (!win) { showToast('Gagal! Izinkan pop-up di browser.', 'error'); return; }
+  const tglLabel = startedAt ? new Date(startedAt).toLocaleDateString('id-ID',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) : '—';
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Laporan Sesi MMG</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;} body{font-family:'Segoe UI',Arial,sans-serif;background:#f4f6f8;color:#333;}
+    .cover{background:linear-gradient(135deg,#0c4a6e,#0891b2);color:#fff;padding:40px 48px 30px;}
+    .cover h1{font-size:26px;font-weight:700;margin-bottom:5px;} .cover p{opacity:.75;font-size:13px;}
+    .cover .logo{font-size:11px;text-transform:uppercase;letter-spacing:.15em;opacity:.6;margin-bottom:10px;}
+    .badge-row{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;}
+    .badge{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:9px 14px;}
+    .badge .val{font-size:20px;font-weight:700;} .badge .lbl{font-size:10px;opacity:.7;margin-top:2px;}
+    .body{padding:28px 36px;}
+    .section{background:#fff;border-radius:12px;border:1px solid #e8e8e8;box-shadow:0 2px 8px rgba(0,0,0,.04);margin-bottom:20px;overflow:hidden;}
+    .section-head{background:#f0f9ff;border-bottom:1px solid #e0f2fe;padding:12px 18px;font-size:13px;font-weight:700;color:#0891b2;}
+    .section-body{padding:18px;}
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+    .kpi{background:#f8f9fa;border-radius:8px;padding:12px;text-align:center;}
+    .kpi .v{font-size:19px;font-weight:700;margin-bottom:3px;} .kpi .l{font-size:10px;color:#888;}
+    .dist-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;}
+    .dist{border-radius:8px;padding:12px;text-align:center;}
+    .sum-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
+    .sum-item{background:#f8f9fa;border-radius:8px;padding:11px;}
+    .sum-item .sl{font-size:11px;color:#888;margin-bottom:3px;} .sum-item .sv{font-size:13px;font-weight:600;}
+    .chart-wrap{padding:16px;height:280px;}
+    table{width:100%;border-collapse:collapse;font-size:12px;}
+    th{background:#f0f9ff;color:#0891b2;font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:9px 11px;text-align:left;border-bottom:2px solid #e0f2fe;}
+    td{padding:8px 11px;border-bottom:1px solid #f5f5f5;}
+    .footer{text-align:center;font-size:10px;color:#aaa;margin-top:20px;padding-bottom:14px;}
+    @media print{body{background:#fff;}.cover,.section-head{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+  </style></head><body>
+  <div class="cover">
+    <div class="logo">Mechanomyography Monitoring System</div>
+    <h1>Laporan Sesi Rekaman</h1>
+    <p>Pasien: <b>${u.name}</b> &nbsp;|&nbsp; Tanggal Sesi: ${tglLabel}</p>
+    <div class="badge-row">
+      <div class="badge"><div class="val">${total}</div><div class="lbl">Total Data</div></div>
+      <div class="badge"><div class="val">${avg} N</div><div class="lbl">Rata-rata Force</div></div>
+      <div class="badge"><div class="val">${maxF} N</div><div class="lbl">Force Tertinggi</div></div>
+      <div class="badge"><div class="val">${normAvgN.toFixed(2)} N</div><div class="lbl">Target Normal</div></div>
+    </div>
+  </div>
+  <div class="body">
+    <div class="section">
+      <div class="section-head">📈 Grafik Tren Kekuatan Otot</div>
+      <div class="chart-wrap">${chartSVG}</div>
+    </div>
+    <div class="section">
+      <div class="section-head">📊 Analisis Statistik</div>
+      <div class="section-body">
+        <div class="kpi-grid">
+          <div class="kpi"><div class="v" style="color:#0891b2">${avg} N</div><div class="l">Rata-rata</div></div>
+          <div class="kpi"><div class="v" style="color:#16a34a">${maxF} N</div><div class="l">Tertinggi</div></div>
+          <div class="kpi"><div class="v" style="color:#dc2626">${minF} N</div><div class="l">Terendah</div></div>
+          <div class="kpi"><div class="v" style="color:#7c3aed">${total}</div><div class="l">Total Data</div></div>
+        </div>
+        <div class="dist-grid">
+          <div class="dist" style="background:#f0fdf4;border:1px solid #bbf7d0"><div style="font-size:20px;font-weight:700;color:#16a34a">${nNormal}</div><div style="font-size:11px;color:#666;margin-top:2px">Normal (${((nNormal/total)*100).toFixed(1)}%)</div></div>
+          <div class="dist" style="background:#fffbeb;border:1px solid #fde68a"><div style="font-size:20px;font-weight:700;color:#e8a838">${nSedang}</div><div style="font-size:11px;color:#666;margin-top:2px">Sedang (${((nSedang/total)*100).toFixed(1)}%)</div></div>
+          <div class="dist" style="background:#fef2f2;border:1px solid #fecaca"><div style="font-size:20px;font-weight:700;color:#dc2626">${nRendah}</div><div style="font-size:11px;color:#666;margin-top:2px">Rendah (${((nRendah/total)*100).toFixed(1)}%)</div></div>
+        </div>
+        <div class="sum-grid">
+          <div class="sum-item"><div class="sl">Kondisi Keseluruhan</div><div class="sv">${kualitas}</div></div>
+          <div class="sum-item"><div class="sl">Tren Sesi</div><div class="sv">${trend}</div></div>
+          <div class="sum-item"><div class="sl">Batas Minimal Normal</div><div class="sv" style="color:#dc2626">${normMinN.toFixed(2)} N</div></div>
+          <div class="sum-item"><div class="sl">Target Rata-rata Normal</div><div class="sv" style="color:#16a34a">${normAvgN.toFixed(2)} N</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-head">📋 Data Detail Sesi</div>
+      <div class="section-body" style="padding:0">
+        <table>
+          <thead><tr><th>#</th><th>Waktu</th><th>Force (N)</th><th>Status</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="footer">Sistem Monitoring Mechanomyography — BRIN KST Samaun Samadikun &nbsp;|&nbsp; Dicetak: ${new Date().toLocaleString('id-ID')}</div>
+  </div>
+  <script>setTimeout(()=>window.print(),600);<\/script>
+  </body></html>`);
+  win.document.close();
 }
 
 function exportCSVHistory() {

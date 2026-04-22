@@ -77,6 +77,7 @@ const Firebase = {
       if (!res.ok) return null;
       const json = await res.json();
       if (!json || json.force_avg === undefined) return null;
+      if (parseFloat(json.force_avg) <= 0) return null; // alat belum aktif
       return {
         force:   parseFloat(json.force_avg  || 0),
         mvc:     parseFloat(json.mvc_avg    || 0),

@@ -194,7 +194,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
         <div class="card-title">Aksi Cepat</div>
         <div style="display:flex;flex-direction:column;gap:8px">
           <button onclick="doExportPDF()" class="btn btn-o btn-full">📄 Export Laporan PDF</button>
-          <button onclick="doExportSVG()" class="btn btn-o btn-full">📈 Export Grafik SVG</button>
+          <button onclick="doExportCSV()" class="btn btn-o btn-full">📊 Export CSV</button>
         </div>
       </div>
     </div>
@@ -494,6 +494,12 @@ if (!win) {
       </div>
     </div>
     <div class="section">
+      <div class="section-head">📈 Grafik Tren Kekuatan Otot</div>
+      <div class="section-body">
+        <div id="chart-placeholder" style="width:100%;height:300px;"></div>
+      </div>
+    </div>
+    <div class="section">
       <div class="section-head">📋 Data Detail Sesi</div>
       <div class="section-body" style="padding:0">
         <table>
@@ -504,15 +510,63 @@ if (!win) {
     </div>
     <div class="footer">Sistem Monitoring Mechanomyography — BRIN KST Samaun Samadikun &nbsp;|&nbsp; Dicetak: ${new Date().toLocaleString('id-ID')}</div>
   </div>
-  <script>setTimeout(()=>window.print(),600);<\/script>
+  <script>
+    (function() {
+      const container = document.getElementById('chart-placeholder');
+      if (!container) return;
+      const events = ' + JSON.stringify(buf.map(e=>({force:e.force,mvc:e.mvc||0,status:e.status,timestamp:e.timestamp}))) + ';
+      if (!events || !events.length) { container.innerHTML = '<p style=\"text-align:center;color:#aaa;padding:40px\">Tidak ada data grafik</p>'; return; }
+      const W=800,H=280,pL=55,pR=20,pT=18,pB=45;
+      const cW=W-pL-pR,cH=H-pT-pB;
+      const forces=events.map(e=>e.force);
+      const normAvg=' + normAvgN.toFixed(3) + ';
+      const normMin=' + normMinN.toFixed(3) + ';
+      const maxV=Math.max(...forces,normAvg*1.2);
+      const toX=i=>pL+(i/Math.max(events.length-1,1))*cW;
+      const toY=v=>pT+cH-(v/maxV)*cH;
+      let path=events.map((e,i)=>(i===0?'M':'L')+toX(i).toFixed(1)+' '+toY(e.force).toFixed(1)).join(' ');
+      let area=path+' L '+toX(events.length-1).toFixed(1)+' '+(pT+cH)+' L '+pL+' '+(pT+cH)+' Z';
+      const yAvg=toY(normAvg),yMin=toY(normMin);
+      const step=Math.max(1,Math.floor(events.length/8));
+      let xLbls=events.map((e,i)=>i%step!==0&&i!==events.length-1?'':'<text x="'+toX(i).toFixed(1)+'" y="'+(pT+cH+14)+'" text-anchor="middle" font-size="9" fill="#888">'+new Date(e.timestamp).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+'</text>').join('');
+      let yLbls='';for(let i=0;i<=5;i++){const v=maxV*i/5;const y=toY(v);yLbls+='<text x="'+(pL-5)+'" y="'+(y+4).toFixed(1)+'" text-anchor="end" font-size="9" fill="#888">'+v.toFixed(1)+'</text>';}
+      container.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+H+'" style="width:100%;height:100%">'
+        +'<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0891b2" stop-opacity="0.2"/><stop offset="100%" stop-color="#0891b2" stop-opacity="0"/></linearGradient></defs>'
+        +'<path d="'+area+'" fill="url(#g)"/>'
+        +'<line x1="'+pL+'" y1="'+yAvg.toFixed(1)+'" x2="'+(W-pR)+'" y2="'+yAvg.toFixed(1)+'" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="6 4"/>'
+        +'<text x="'+(W-pR-2)+'" y="'+(yAvg-4).toFixed(1)+'" text-anchor="end" font-size="9" fill="#16a34a">Target '+normAvg.toFixed(2)+' N</text>'
+        +'<line x1="'+pL+'" y1="'+yMin.toFixed(1)+'" x2="'+(W-pR)+'" y2="'+yMin.toFixed(1)+'" stroke="#dc2626" stroke-width="1" stroke-dasharray="5 4"/>'
+        +'<text x="'+(W-pR-2)+'" y="'+(yMin-4).toFixed(1)+'" text-anchor="end" font-size="9" fill="#dc2626">Min '+normMin.toFixed(2)+' N</text>'
+        +'<path d="'+path+'" fill="none" stroke="#0891b2" stroke-width="2" stroke-linejoin="round"/>'
+        +xLbls+yLbls
+        +'<line x1="'+pL+'" y1="'+pT+'" x2="'+pL+'" y2="'+(pT+cH)+'" stroke="#ccc" stroke-width="1"/>'
+        +'<line x1="'+pL+'" y1="'+(pT+cH)+'" x2="'+(W-pR)+'" y2="'+(pT+cH)+'" stroke="#ccc" stroke-width="1"/>'
+        +'</svg>';
+    })();
+    setTimeout(()=>window.print(),800);
+  <\/script>
   </body></html>`);
   win.document.close();
 }
 
-// ── EXPORT SVG ─────────────────────────────────────────────────
-function doExportSVG() {
+// ── EXPORT CSV ─────────────────────────────────────────────────
+function doExportCSV() {
   if (!buf.length) { showToast('Menunggu data dari sensor...','error'); return; }
-  exportToSVG(buf, `Grafik Kekuatan Otot — ${user.name} — ${new Date().toLocaleDateString('id-ID')}`);
+  let csv = 'No,Waktu,Force (N),MVC (%),Status\n';
+  buf.forEach((e, i) => {
+    const waktu = new Date(e.timestamp).toLocaleString('id-ID');
+    const mvc   = e.mvc !== undefined ? parseFloat(e.mvc).toFixed(1) : '—';
+    const stat  = e.status || '—';
+    csv += `${i+1},"${waktu}",${e.force.toFixed(3)},${mvc},${stat}\n`;
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `Sesi_MMG_${user.name}_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('CSV berhasil diunduh ✓', 'success');
 }
 </script>
 </body>

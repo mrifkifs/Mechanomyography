@@ -68,6 +68,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
         <span style="width:7px;height:7px;border-radius:50%;background:var(--muted);display:inline-block" id="live-dot"></span>
         <span id="live-status-txt">Menunggu sensor...</span>
       </div>
+      <button class="btn btn-o" id="start-btn" onclick="startSession()">▶ Mulai Sesi</button>
       <button class="btn btn-p" id="save-btn" onclick="saveSession()" style="display:none">💾 Simpan Sesi</button>
     </div>
   </div>
@@ -318,7 +319,20 @@ function pushForcePoint(force) {
 // ── SESSION & BUFFER ────────────────────────────────────────────
 let sessionId = null, recSec = 0, recTmr = null;
 let buf = [];
-let dataReceived = false;  // flag: apakah sudah pernah dapat data
+let dataReceived = false;
+let isRecording = false; // hanya isi buf saat sesi aktif
+
+function startSession() {
+  buf = []; recSec = 0;
+  isRecording = true;
+  if (recTmr) { clearInterval(recTmr); recTmr = null; }
+  recTmr = setInterval(() => { recSec++; setText('rec-t', formatDur(recSec)); }, 1000);
+  document.getElementById('rec-t').style.display = '';
+  document.getElementById('rec-t').textContent = '00:00';
+  document.getElementById('start-btn').style.display = 'none';
+  document.getElementById('save-btn').style.display = '';
+  showToast('Sesi dimulai — rekaman aktif', 'success');
+}
 
 function ensureTimerRunning() {
   if (recTmr) return;
@@ -354,12 +368,18 @@ async function saveSession() {
     await API.pushMmgBatch(sessionId, buf);
     const avgGrip = buf.reduce((a,b)=>a+b.force,0)/buf.length;
     await API.endSession(sessionId, { duration_seconds: recSec, avg_grip_pct: avgGrip });
+    // Simpan data buf per sesi ke localStorage
+    const sessionData = JSON.parse(localStorage.getItem('myo_session_data') || '{}');
+    sessionData[sessionId] = buf.map(e => ({ timestamp: e.timestamp, force: e.force, mvc: e.mvc||0, status: e.status }));
+    localStorage.setItem('myo_session_data', JSON.stringify(sessionData));
     showToast(`Sesi tersimpan — ${buf.length} data, durasi ${formatDur(recSec)}`, 'success');
     buf = []; recSec = 0; sessionId = null;
+    isRecording = false;
     if (recTmr) { clearInterval(recTmr); recTmr = null; }
     setText('rec-t', '00:00');
     document.getElementById('rec-t').style.display = 'none';
-    btn.style.display = 'none';
+    document.getElementById('save-btn').style.display = 'none';
+    document.getElementById('start-btn').style.display = '';
   } catch(e) {
     showToast('Gagal menyimpan sesi', 'error');
   }
@@ -371,18 +391,18 @@ Firebase.startPolling((data) => {
   const force = data.force;
   pushForcePoint(force);
 
-  // Saat data pertama masuk: mulai timer, tampilkan tombol simpan
+  // Update status koneksi sensor
   if (!dataReceived) {
     dataReceived = true;
-    ensureTimerRunning();
-    document.getElementById('save-btn').style.display = '';
     setLiveStatus(true);
   }
 
-  // Selalu masukkan ke buffer
+  // Masukkan ke buffer hanya saat sesi aktif
   const statNow = force >= normAvgN ? 'Normal' : force >= normMinN ? 'Sedang' : 'Rendah';
-  buf.push({ timestamp: new Date().toISOString(), force, status: statNow });
-  if (buf.length > 500) buf.shift();
+  if (isRecording) {
+    buf.push({ timestamp: new Date().toISOString(), force, mvc: data.mvc||0, status: statNow });
+    if (buf.length > 500) buf.shift();
+  }
 
   setText('lm-force', force.toFixed(3));
   setText('lm-status', statNow);

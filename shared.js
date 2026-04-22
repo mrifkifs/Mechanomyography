@@ -96,9 +96,12 @@ const Firebase = {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       if (!json) return [];
-      return Object.entries(json).map(([key, val]) => ({
-        force: parseFloat(val.force || 0), status: val.status || '—', timestamp: parseInt(key),
-      })).sort((a,b) => a.timestamp - b.timestamp);
+      return Object.entries(json)
+        .map(([key, val]) => ({
+          force: parseFloat(val.force || 0), mvc: parseFloat(val.mvc || 0), status: val.status || '—', timestamp: parseInt(key),
+        }))
+        .filter(e => e.force > 0)
+        .sort((a,b) => a.timestamp - b.timestamp);
     } catch (e) { return []; }
   },
   pushEvent: async (force, mvc, status) => {

@@ -5,7 +5,7 @@
    Fields: ADC1, ADC2, ADC3, ADC_avg, force_avg, mvc_avg, status_avg, timestamp
    ================================================ */
 
-const FB_URL      = 'https://send-mmg-default-rtdb.asia-southeast1.firebasedatabase.app';
+const FB_URL      = 'https://mmgbrin-default-rtdb.asia-southeast1.firebasedatabase.app/';
 const FB_REALTIME = `${FB_URL}/MMG_Realtime.json`;
 const FB_EVENTS   = `${FB_URL}/MMG_Events.json?orderBy="$key"&limitToLast=100`;
 
